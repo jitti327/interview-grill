@@ -106,15 +106,58 @@ export default function InterviewRoom() {
     }
   };
 
+  const [streamingFeedback, setStreamingFeedback] = useState("");
+
   const handleSubmitAnswer = async () => {
     if (!answer.trim() || !currentRound) return;
     setEvaluating(true);
     setTimerActive(false);
+    setStreamingFeedback("");
+
     try {
-      const res = await evaluateAnswer(sessionId, currentRound.id, answer.trim());
-      setRounds((prev) =>
-        prev.map((r) => (r.id === currentRound.id ? { ...r, ...res.data } : r))
-      );
+      const API_BASE = process.env.REACT_APP_BACKEND_URL;
+      const response = await fetch(`${API_BASE}/api/interview/evaluate-stream`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ session_id: sessionId, round_id: currentRound.id, answer: answer.trim() }),
+      });
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let feedbackText = "";
+      let completeData = null;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const text = decoder.decode(value, { stream: true });
+        const events = text.split('\n\n').filter(Boolean);
+        for (const event of events) {
+          if (!event.startsWith('data: ')) continue;
+          const payload = event.replace('data: ', '').trim();
+          if (payload === '[DONE]') continue;
+          try {
+            const parsed = JSON.parse(payload);
+            if (parsed.type === 'text') {
+              feedbackText += parsed.text;
+              setStreamingFeedback(feedbackText);
+              scrollToBottom();
+            } else if (parsed.type === 'complete') {
+              completeData = parsed.data;
+            } else if (parsed.type === 'error') {
+              toast.error(parsed.text);
+            }
+          } catch {}
+        }
+      }
+
+      if (completeData) {
+        setRounds((prev) =>
+          prev.map((r) => (r.id === currentRound.id ? { ...r, ...completeData } : r))
+        );
+      }
+      setStreamingFeedback("");
       setCurrentRound(null);
       setAnswer("");
       scrollToBottom();
@@ -125,10 +168,25 @@ export default function InterviewRoom() {
         await handleEndInterview();
       }
     } catch (err) {
-      const msg = err?.response?.data?.detail || "Failed to evaluate answer. AI may be busy — try again.";
-      toast.error(msg);
+      // Fallback to regular endpoint
+      try {
+        const res = await evaluateAnswer(sessionId, currentRound.id, answer.trim());
+        setRounds((prev) =>
+          prev.map((r) => (r.id === currentRound.id ? { ...r, ...res.data } : r))
+        );
+        setCurrentRound(null);
+        setAnswer("");
+        const sess = await getSession(sessionId);
+        setSession(sess.data.session);
+        if (sess.data.session.questions_asked >= sess.data.session.num_questions) {
+          await handleEndInterview();
+        }
+      } catch (fallbackErr) {
+        toast.error("Failed to evaluate answer. AI may be busy — try again.");
+      }
     } finally {
       setEvaluating(false);
+      setStreamingFeedback("");
     }
   };
 
@@ -392,11 +450,18 @@ export default function InterviewRoom() {
             </motion.div>
           )}
 
-          {/* Evaluating */}
+          {/* Evaluating with streaming feedback */}
           {evaluating && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center gap-2 ml-8 text-xs text-zinc-500">
-              <Loader2 className="w-3 h-3 animate-spin text-yellow-500" />
-              AI is evaluating your answer...
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="ml-8">
+              <div className="flex items-center gap-2 mb-2 text-xs text-zinc-500">
+                <Loader2 className="w-3 h-3 animate-spin text-yellow-500" />
+                AI is evaluating your answer...
+              </div>
+              {streamingFeedback && (
+                <div className="p-3 bg-[#121212] border border-yellow-500/20 text-xs text-zinc-300 leading-relaxed">
+                  {streamingFeedback}<span className="text-yellow-500 animate-blink">_</span>
+                </div>
+              )}
             </motion.div>
           )}
 

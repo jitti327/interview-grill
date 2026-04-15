@@ -5,6 +5,7 @@ import { Terminal, BarChart3, Clock, Zap, ArrowLeftRight, User, LogOut, Trophy, 
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
+import NotificationBell from "@/components/NotificationBell";
 
 export default function Navbar() {
   const location = useLocation();
@@ -52,6 +53,7 @@ export default function Navbar() {
         </div>
 
         <div className="flex items-center gap-3">
+          <NotificationBell />
           {user ? (
             <DropdownMenu>
               <DropdownMenuTrigger data-testid="user-menu-trigger" className="flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-zinc-400 border border-[#27272A] hover:border-zinc-600 transition-colors">

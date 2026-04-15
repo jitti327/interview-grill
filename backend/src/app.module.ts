@@ -6,6 +6,7 @@ import { InterviewModule } from './interview/interview.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { BookmarksModule } from './bookmarks/bookmarks.module';
 import { AiModule } from './ai/ai.module';
+import { NotificationsModule } from './notifications/notifications.module';
 import { AppController } from './app.controller';
 import { AuthService } from './auth/auth.service';
 
@@ -25,6 +26,7 @@ import { AuthService } from './auth/auth.service';
     DashboardModule,
     BookmarksModule,
     AiModule,
+    NotificationsModule,
   ],
   controllers: [AppController],
 })

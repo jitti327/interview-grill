@@ -317,6 +317,86 @@ class DevGrillAPITester:
         except Exception as e:
             return self.log_test("Swagger Documentation", False, str(e))
 
+    def test_evaluate_stream(self):
+        """Test SSE streaming evaluation endpoint"""
+        if not self.session_id or not self.round_id:
+            return self.log_test("SSE Evaluate Stream", False, "Missing session or round ID")
+        try:
+            data = {
+                "session_id": self.session_id,
+                "round_id": self.round_id,
+                "answer": "This is a test answer for streaming evaluation."
+            }
+            response = self.session.post(f"{self.base_url}/api/interview/evaluate-stream", 
+                                       json=data, stream=True)
+            success = response.status_code == 200
+            if success:
+                # Check Content-Type header for SSE
+                content_type = response.headers.get('Content-Type', '')
+                success = 'text/event-stream' in content_type
+                if success:
+                    # Read first few chunks to verify SSE format
+                    chunk_count = 0
+                    for chunk in response.iter_content(chunk_size=1024):
+                        if chunk:
+                            chunk_text = chunk.decode('utf-8')
+                            if 'data:' in chunk_text:
+                                chunk_count += 1
+                            if chunk_count >= 2:  # Got some SSE data
+                                break
+                    success = chunk_count > 0
+            return self.log_test("SSE Evaluate Stream", success, f"Status: {response.status_code}, Content-Type: {content_type}")
+        except Exception as e:
+            return self.log_test("SSE Evaluate Stream", False, str(e))
+
+    def test_notifications_list(self):
+        """Test notifications list endpoint"""
+        try:
+            response = self.session.get(f"{self.base_url}/api/notifications")
+            success = response.status_code == 200
+            if success:
+                data = response.json()
+                success = isinstance(data, list)
+            return self.log_test("Notifications List", success, f"Status: {response.status_code}")
+        except Exception as e:
+            return self.log_test("Notifications List", False, str(e))
+
+    def test_notifications_count(self):
+        """Test notifications unread count endpoint"""
+        try:
+            response = self.session.get(f"{self.base_url}/api/notifications/count")
+            success = response.status_code == 200
+            if success:
+                data = response.json()
+                success = "count" in data and isinstance(data["count"], int)
+            return self.log_test("Notifications Count", success, f"Status: {response.status_code}")
+        except Exception as e:
+            return self.log_test("Notifications Count", False, str(e))
+
+    def test_notifications_mark_all_read(self):
+        """Test mark all notifications as read"""
+        try:
+            response = self.session.post(f"{self.base_url}/api/notifications/mark-all-read")
+            success = response.status_code == 201
+            if success:
+                data = response.json()
+                success = "message" in data
+            return self.log_test("Mark All Notifications Read", success, f"Status: {response.status_code}")
+        except Exception as e:
+            return self.log_test("Mark All Notifications Read", False, str(e))
+
+    def test_weekly_summary(self):
+        """Test weekly performance summary generation"""
+        try:
+            response = self.session.post(f"{self.base_url}/api/notifications/weekly-summary")
+            success = response.status_code == 201
+            if success:
+                data = response.json()
+                success = "sessions" in data and "message" in data
+            return self.log_test("Weekly Summary", success, f"Status: {response.status_code}")
+        except Exception as e:
+            return self.log_test("Weekly Summary", False, str(e))
+
     def test_logout(self):
         """Test logout"""
         try:
@@ -349,6 +429,9 @@ class DevGrillAPITester:
         time.sleep(2)  # Wait for AI processing
         self.test_evaluate_answer()
         
+        # NEW FEATURE - SSE Streaming
+        self.test_evaluate_stream()
+        
         # Bookmarks
         self.test_create_bookmark()
         self.test_list_bookmarks()
@@ -363,6 +446,12 @@ class DevGrillAPITester:
         self.test_leaderboard()
         self.test_study_plan()
         self.test_swagger_docs()
+        
+        # NEW FEATURES - Iteration 6 - Notifications
+        self.test_notifications_list()
+        self.test_notifications_count()
+        self.test_notifications_mark_all_read()
+        self.test_weekly_summary()
         
         # Session comparison
         self.test_session_comparison()

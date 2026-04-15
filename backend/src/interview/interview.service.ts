@@ -1,10 +1,11 @@
-import { Injectable, HttpException } from '@nestjs/common';
+import { Injectable, HttpException, Inject, forwardRef } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { v4 as uuidv4 } from 'uuid';
 import { AiService } from '../ai/ai.service';
 import { Session } from '../schemas/session.schema';
 import { Round } from '../schemas/round.schema';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class InterviewService {
@@ -12,6 +13,7 @@ export class InterviewService {
     @InjectModel(Session.name) private sessionModel: Model<Session>,
     @InjectModel(Round.name) private roundModel: Model<Round>,
     private aiService: AiService,
+    @Inject(forwardRef(() => NotificationsService)) private notifService: NotificationsService,
   ) {}
 
   async createSession(data: any, userId?: string): Promise<any> {
@@ -127,7 +129,7 @@ export class InterviewService {
     }
   }
 
-  async completeSession(sessionId: string): Promise<any> {
+  async completeSession(sessionId: string, userId?: string): Promise<any> {
     const session = await this.sessionModel.findOne({ id: sessionId }).lean();
     if (!session) throw new HttpException('Session not found', 404);
 
@@ -144,6 +146,12 @@ export class InterviewService {
     const updated = { ...session, status: 'completed', avg_score: Math.round(avg * 10) / 10, completed_at: now };
     delete (updated as any)._id;
     delete (updated as any).__v;
+
+    const effectiveUserId = userId || (session as any).user_id;
+    if (effectiveUserId && this.notifService) {
+      this.notifService.onSessionComplete(effectiveUserId, updated).catch(() => {});
+    }
+
     return { session: updated, rounds };
   }
 
