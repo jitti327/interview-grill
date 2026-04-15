@@ -1,0 +1,97 @@
+{
+  "theme": "dark",
+  "archetype": "4 (Swiss & High-Contrast / Developer Brutalism)",
+  "typography": {
+    "headings": {
+      "fontFamily": "'Outfit', 'Exo 2', sans-serif",
+      "weights": ["400", "600", "700"],
+      "h1": "text-4xl sm:text-5xl lg:text-6xl tracking-tighter leading-none font-bold",
+      "h2": "text-2xl sm:text-3xl lg:text-4xl tracking-tight leading-tight font-semibold",
+      "h3": "text-xl sm:text-2xl tracking-tight font-medium"
+    },
+    "body": {
+      "fontFamily": "'JetBrains Mono', 'IBM Plex Mono', monospace",
+      "sizes": {
+        "base": "text-base leading-relaxed",
+        "small": "text-sm leading-normal text-zinc-400",
+        "labels": "text-xs tracking-[0.2em] uppercase font-bold text-yellow-500"
+      }
+    }
+  },
+  "colors": {
+    "background": {
+      "page": "#0A0A0A",
+      "surface": "#121212",
+      "surfaceHover": "#18181B"
+    },
+    "text": {
+      "primary": "#FAFAFA",
+      "secondary": "#A1A1AA",
+      "muted": "#52525B"
+    },
+    "border": {
+      "default": "#27272A",
+      "focus": "#EAB308",
+      "subtle": "#18181B"
+    },
+    "accents": {
+      "primary": "#EAB308",
+      "primaryHover": "#CA8A04",
+      "destructive": "#EF4444",
+      "success": "#10B981"
+    }
+  },
+  "layout_and_spacing": {
+    "grid_system": "The Control Room Grid: grid-cols-1 md:grid-cols-3 lg:grid-cols-4, tight gaps (gap-4 or gap-6). Utilize pure HTML/CSS grids with direct child placements.",
+    "container_padding": "p-6 md:p-8 lg:p-12",
+    "border_radius": "rounded-none or max rounded-sm (2px). Sharp edges emphasize the strict/brutalist developer vibe.",
+    "alignment": "Strict left-alignment for all functional text. Center alignment ONLY for high-impact hero headings or standalone warnings."
+  },
+  "surfaces_and_micro_themes": {
+    "cards": "Retro-Futurism/Terminal style. Solid #121212 background, 1px solid #27272A border. No drop shadows. Use border-yellow-500/50 for active/focus states.",
+    "buttons": "Flat, sharp edges. Primary CTA: bg-yellow-500 text-black font-bold. Secondary: border border-zinc-700 hover:bg-zinc-800 text-white.",
+    "inputs": "Shadcn inputs customized: rounded-none, border-zinc-700, bg-[#0A0A0A], focus:ring-1 focus:ring-yellow-500."
+  },
+  "components_strategy": {
+    "navigation": "Sticky header with solid #0A0A0A background and 1px solid #27272A bottom border. Minimal nav links. Right-aligned 'Start Interview' primary CTA.",
+    "dashboard": "Cardless grid or flat 1px bordered containers. Use Recharts for performance tracking (radar charts for skill progression).",
+    "interview_interface": "Split pane layout (Resizable panels if possible). Left pane: AI Chat/Grilling. Right pane: Code Editor/Question Box. Strict visual separation.",
+    "feedback_modals": "Shadcn Dialog. Dark overlays (bg-black/80). High contrast text."
+  },
+  "animations": {
+    "micro_interactions": "Instant state changes. Hover triggers a -translate-y-[1px] lift with a yellow border swap. No soft fades.",
+    "page_transitions": "Framer motion page entrances: opacity 0 to 1 with a quick 0.2s duration. Staggered list reveals.",
+    "ai_typing": "Blinking cursor `_` at the end of AI responses. 'Glitch' text effect for aggressive grilling mode."
+  },
+  "media": {
+    "image_urls": {
+      "hero_background": {
+        "url": "https://images.unsplash.com/photo-1754738381772-897447d10eb6?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2Njl8MHwxfHNlYXJjaHwyfHxhYnN0cmFjdCUyMHRlY2hub2xvZ3klMjBkYXJrfGVufDB8fHx8MTc3NjI3ODk4OHww&ixlib=rb-4.1.0&q=85",
+        "description": "Abstract flowing shape with dark highlights. Use with a heavy mix-blend-mode or low opacity overlay (bg-black/80) as a hero background texture."
+      },
+      "ai_persona_avatar": {
+        "url": "https://images.unsplash.com/photo-1750192524484-36450bbb1dd6?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMjd8MHwxfHNlYXJjaHwxfHxyb2JvdCUyMGRhcmslMjBjbG9zZXxlbnwwfHx8fDE3NzYyNzg5ODh8MA&ixlib=rb-4.1.0&q=85",
+        "description": "Spooky AI face in darkness. Use for the AI Interviewer profile picture when in aggressive grilling mode."
+      },
+      "code_environment": {
+        "url": "https://images.unsplash.com/photo-1754548930550-be9fa88874f4?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NTZ8MHwxfHNlYXJjaHwyfHxjb2RlJTIwaW50ZXJmYWNlJTIwZGFya3xlbnwwfHx8fDE3NzYyNzg5ODh8MA&ixlib=rb-4.1.0&q=85",
+        "description": "Coder workspace filled with dark code environments. Use in the 'Preparation Paths' grid as thumbnails."
+      },
+      "brand_logo": {
+        "url": "https://images.unsplash.com/photo-1760386129108-d17b9cdfc4fa?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzNDR8MHwxfHNlYXJjaHwxfHxjb21wYW55JTIwbG9nbyUyMHdoaXRlfGVufDB8fHx8MTc3NjI3ODk4OHww&ixlib=rb-4.1.0&q=85",
+        "description": "Audible neon logo. Use as a stylized placeholder for partner logos or tech stack icons."
+      }
+    }
+  },
+  "instructions_to_main_agent": [
+    "You MUST implement this using Tailwind CSS. Map the provided colors as CSS variables in index.css.",
+    "Do NOT use Inter or Roboto for anything. Import 'Outfit' and 'JetBrains Mono' via Google Fonts (or Fontsource).",
+    "Implement 'The Control Room' grid for the dashboard: grid-cols-1 md:grid-cols-3, gap-4, h-full items. Grid items must be direct children.",
+    "Use Phosphor Icons (@phosphor-icons/react) with duotone or bold weights.",
+    "For the AI Interview component, use a monospace font (JetBrains Mono) for the chat text to simulate a terminal.",
+    "Add 'data-testid' to EVERY interactive element (buttons, forms, links) using kebab-case (e.g., data-testid='start-interview-btn').",
+    "Avoid glassmorphism. Use solid colors and 1px borders (#27272A).",
+    "For the code editor component, use a dark theme (like VSCode Dark or Monokai).",
+    "Ensure all Shadcn components (tabs, inputs, cards) are overridden to have sharp corners (rounded-none or max rounded-sm) to match the brutalist developer aesthetic."
+  ]
+}
