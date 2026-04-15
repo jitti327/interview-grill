@@ -1,34 +1,36 @@
-.App-logo {
-    height: 40vmin;
-    pointer-events: none;
+.interview-terminal {
+  background: #0A0A0A;
+  border: 1px solid #27272A;
+  font-family: 'JetBrains Mono', monospace;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-    .App-logo {
-        animation: App-logo-spin infinite 20s linear;
-    }
+.score-strong { color: #10B981; }
+.score-acceptable { color: #EAB308; }
+.score-poor { color: #EF4444; }
+
+.verdict-badge-strong { background: rgba(16, 185, 129, 0.15); color: #10B981; border: 1px solid rgba(16, 185, 129, 0.3); }
+.verdict-badge-acceptable { background: rgba(234, 179, 8, 0.15); color: #EAB308; border: 1px solid rgba(234, 179, 8, 0.3); }
+.verdict-badge-needs_improvement { background: rgba(239, 68, 68, 0.15); color: #EF4444; border: 1px solid rgba(239, 68, 68, 0.3); }
+.verdict-badge-poor { background: rgba(239, 68, 68, 0.15); color: #EF4444; border: 1px solid rgba(239, 68, 68, 0.3); }
+
+.hero-gradient {
+  position: relative;
+  overflow: hidden;
 }
 
-.App-header {
-    background-color: #0f0f10;
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    font-size: calc(10px + 2vmin);
-    color: white;
+.hero-gradient::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, transparent 0%, #0A0A0A 100%);
+  z-index: 1;
 }
 
-.App-link {
-    color: #61dafb;
+.tech-card {
+  transition: border-color 0.15s ease, transform 0.15s ease;
 }
 
-@keyframes App-logo-spin {
-    from {
-        transform: rotate(0deg);
-    }
-    to {
-        transform: rotate(360deg);
-    }
+.tech-card:hover {
+  border-color: #EAB308;
+  transform: translateY(-1px);
 }
