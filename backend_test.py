@@ -47,7 +47,7 @@ class DevGrillAPITester:
                 "name": f"Test User {timestamp}"
             }
             response = self.session.post(f"{self.base_url}/api/auth/register", json=data)
-            success = response.status_code == 200
+            success = response.status_code == 201
             if success:
                 user_data = response.json()
                 self.user_id = user_data.get("id")
@@ -63,7 +63,7 @@ class DevGrillAPITester:
                 "password": "admin123"
             }
             response = self.session.post(f"{self.base_url}/api/auth/login", json=data)
-            success = response.status_code == 200
+            success = response.status_code == 201
             if success:
                 user_data = response.json()
                 self.user_id = user_data.get("id")
@@ -95,7 +95,7 @@ class DevGrillAPITester:
                 "time_per_question": 300
             }
             response = self.session.post(f"{self.base_url}/api/sessions", json=data)
-            success = response.status_code == 200
+            success = response.status_code == 201
             if success:
                 session_data = response.json()
                 self.session_id = session_data.get("id")
@@ -268,7 +268,7 @@ class DevGrillAPITester:
             return self.log_test("Complete Session", False, "No session ID available")
         try:
             response = self.session.post(f"{self.base_url}/api/sessions/{self.session_id}/complete")
-            success = response.status_code == 200
+            success = response.status_code == 201
             if success:
                 data = response.json()
                 success = data.get("session", {}).get("status") == "completed"
@@ -280,7 +280,7 @@ class DevGrillAPITester:
         """Test logout"""
         try:
             response = self.session.post(f"{self.base_url}/api/auth/logout")
-            success = response.status_code == 200
+            success = response.status_code == 201
             return self.log_test("Logout", success, f"Status: {response.status_code}")
         except Exception as e:
             return self.log_test("Logout", False, str(e))
