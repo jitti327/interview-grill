@@ -1,7 +1,7 @@
 import { Link, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
-import { Terminal, BarChart3, Clock, Zap, ArrowLeftRight, User, LogOut } from "lucide-react";
+import { Terminal, BarChart3, Clock, Zap, ArrowLeftRight, User, LogOut, Trophy, BookOpen } from "lucide-react";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
@@ -15,6 +15,8 @@ export default function Navbar() {
     { path: "/", label: "HOME", icon: Terminal },
     { path: "/dashboard", label: "DASHBOARD", icon: BarChart3 },
     { path: "/history", label: "HISTORY", icon: Clock },
+    { path: "/leaderboard", label: "RANKS", icon: Trophy },
+    { path: "/study-plan", label: "COACH", icon: BookOpen },
     { path: "/compare", label: "COMPARE", icon: ArrowLeftRight },
   ];
 

@@ -276,6 +276,47 @@ class DevGrillAPITester:
         except Exception as e:
             return self.log_test("Complete Session", False, str(e))
 
+    def test_leaderboard(self):
+        """Test leaderboard endpoint"""
+        try:
+            response = self.session.get(f"{self.base_url}/api/leaderboard")
+            success = response.status_code == 200
+            if success:
+                data = response.json()
+                success = isinstance(data, list)
+                # Check if leaderboard entries have required fields
+                if data and len(data) > 0:
+                    entry = data[0]
+                    success = all(key in entry for key in ["rank", "user_name", "avg_score", "total_sessions"])
+            return self.log_test("Leaderboard", success, f"Status: {response.status_code}")
+        except Exception as e:
+            return self.log_test("Leaderboard", False, str(e))
+
+    def test_study_plan(self):
+        """Test AI coach study plan endpoint"""
+        try:
+            response = self.session.get(f"{self.base_url}/api/coach/study-plan")
+            success = response.status_code == 200
+            if success:
+                data = response.json()
+                success = "weak_topics" in data and "strong_topics" in data and "plan" in data
+            return self.log_test("AI Coach Study Plan", success, f"Status: {response.status_code}")
+        except Exception as e:
+            return self.log_test("AI Coach Study Plan", False, str(e))
+
+    def test_swagger_docs(self):
+        """Test Swagger documentation endpoint"""
+        try:
+            response = self.session.get(f"{self.base_url}/api/docs")
+            success = response.status_code == 200
+            if success:
+                # Check if response contains Swagger/OpenAPI content
+                content = response.text.lower()
+                success = "swagger" in content or "openapi" in content or "api documentation" in content
+            return self.log_test("Swagger Documentation", success, f"Status: {response.status_code}")
+        except Exception as e:
+            return self.log_test("Swagger Documentation", False, str(e))
+
     def test_logout(self):
         """Test logout"""
         try:
@@ -317,6 +358,11 @@ class DevGrillAPITester:
         self.test_weak_topics()
         self.test_skill_radar()
         self.test_score_trend()
+        
+        # NEW FEATURES - Iteration 5
+        self.test_leaderboard()
+        self.test_study_plan()
+        self.test_swagger_docs()
         
         # Session comparison
         self.test_session_comparison()

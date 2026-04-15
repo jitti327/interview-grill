@@ -4,12 +4,14 @@ import { DashboardController } from './dashboard.controller';
 import { DashboardService } from './dashboard.service';
 import { Session, SessionSchema } from '../schemas/session.schema';
 import { Round, RoundSchema } from '../schemas/round.schema';
+import { User, UserSchema } from '../schemas/user.schema';
 
 @Module({
   imports: [
     MongooseModule.forFeature([
       { name: Session.name, schema: SessionSchema },
       { name: Round.name, schema: RoundSchema },
+      { name: User.name, schema: UserSchema },
     ]),
   ],
   controllers: [DashboardController],

@@ -145,14 +145,15 @@ export default function InterviewRoom() {
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const handleTimeUp = useCallback(() => {
-    if (answer.trim()) {
+    if (answer.trim() && currentRound) {
+      toast.warning("Time's up! Auto-submitting your answer...");
       handleSubmitAnswer();
     } else {
-      toast.error("Time's up! Moving to next question.");
+      toast.error("Time's up! No answer submitted. Moving on.");
       setCurrentRound(null);
       setTimerActive(false);
     }
-  }, [answer]);
+  }, [answer, currentRound]);
 
   const handleBookmark = async (roundId) => {
     try {
@@ -478,7 +479,14 @@ export default function InterviewRoom() {
                   <CodeEditor
                     value={answer}
                     onChange={(val) => setAnswer(val || "")}
-                    language={session.tech_stack?.toLowerCase().includes("python") ? "python" : "javascript"}
+                    language={(() => {
+                      const s = (session?.tech_stack || "").toLowerCase();
+                      if (s.includes("python") || s.includes("django")) return "python";
+                      if (s.includes("java") && !s.includes("javascript")) return "java";
+                      if (s.includes(".net") || s.includes("c#")) return "csharp";
+                      if (s.includes("angular") || s.includes("react") || s.includes("vue") || s.includes("node") || s.includes("ember")) return "typescript";
+                      return "javascript";
+                    })()}
                     height="200px"
                   />
                 </div>

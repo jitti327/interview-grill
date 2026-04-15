@@ -34,4 +34,14 @@ export class DashboardController {
   comparison(@Query('session1') s1: string, @Query('session2') s2: string) {
     return this.dashboardService.comparison(s1, s2);
   }
+
+  @Get('leaderboard')
+  leaderboard(@Query('limit') limit?: string) {
+    return this.dashboardService.leaderboard(limit ? parseInt(limit) : 20);
+  }
+
+  @Get('coach/study-plan')
+  studyPlan() {
+    return this.dashboardService.studyPlan();
+  }
 }
