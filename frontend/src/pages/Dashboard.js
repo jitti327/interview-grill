@@ -1,12 +1,13 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { getDashboardOverview, getSkillRadar, getScoreTrend } from "@/lib/api";
+import { getDashboardOverview, getSkillRadar, getScoreTrend, getWeakTopics } from "@/lib/api";
 import {
   RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar,
-  LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid
+  LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
+  BarChart, Bar
 } from "recharts";
-import { Target, TrendingUp, Award, Activity, ArrowRight } from "lucide-react";
+import { Target, TrendingUp, Award, Activity, ArrowRight, AlertTriangle, ArrowLeftRight } from "lucide-react";
 
 const CATEGORY_LABELS = {
   frontend: "Frontend",
@@ -47,15 +48,17 @@ export default function Dashboard() {
   const [overview, setOverview] = useState(null);
   const [radarData, setRadarData] = useState([]);
   const [trendData, setTrendData] = useState([]);
+  const [weakTopics, setWeakTopics] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const load = async () => {
       try {
-        const [ov, rd, td] = await Promise.all([
+        const [ov, rd, td, wt] = await Promise.all([
           getDashboardOverview(),
           getSkillRadar(),
           getScoreTrend(),
+          getWeakTopics(),
         ]);
         setOverview(ov.data);
         setRadarData(
@@ -70,6 +73,7 @@ export default function Dashboard() {
             label: `#${i + 1}`,
           }))
         );
+        setWeakTopics(wt.data);
       } catch (err) {
         console.error(err);
       } finally {
@@ -271,6 +275,67 @@ export default function Dashboard() {
                 </div>
               </motion.div>
             )}
+
+            {/* Weak Topics */}
+            {weakTopics.length > 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.5 }}
+                className="bg-[#121212] border border-[#27272A] p-6 mb-8"
+                data-testid="weak-topics-section"
+              >
+                <div className="flex items-center gap-2 mb-4">
+                  <AlertTriangle className="w-4 h-4 text-red-400" />
+                  <h3 className="text-xs tracking-[0.2em] uppercase font-bold text-zinc-400">
+                    WEAK TOPICS - NEEDS IMPROVEMENT
+                  </h3>
+                </div>
+                <ResponsiveContainer width="100%" height={Math.min(weakTopics.length * 35, 300)}>
+                  <BarChart data={weakTopics.slice(0, 8)} layout="vertical" margin={{ left: 80 }}>
+                    <CartesianGrid stroke="#1A1A1A" strokeDasharray="3 3" horizontal={false} />
+                    <XAxis
+                      type="number"
+                      domain={[0, 10]}
+                      tick={{ fill: "#52525B", fontSize: 10 }}
+                      axisLine={{ stroke: "#27272A" }}
+                    />
+                    <YAxis
+                      type="category"
+                      dataKey="topic"
+                      tick={{ fill: "#A1A1AA", fontSize: 11, fontFamily: "JetBrains Mono" }}
+                      axisLine={{ stroke: "#27272A" }}
+                      width={80}
+                    />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Bar dataKey="avg_score" fill="#EF4444" radius={[0, 2, 2, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </motion.div>
+            )}
+
+            {/* Quick Actions */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.6 }}
+              className="flex gap-3"
+            >
+              <button
+                data-testid="dashboard-compare-btn"
+                onClick={() => navigate("/compare")}
+                className="flex items-center gap-1 px-4 py-2 border border-[#27272A] text-xs font-bold text-zinc-400 hover:border-yellow-500 hover:text-yellow-500 transition-colors"
+              >
+                <ArrowLeftRight className="w-3 h-3" /> COMPARE SESSIONS
+              </button>
+              <button
+                data-testid="dashboard-new-btn"
+                onClick={() => navigate("/setup")}
+                className="bg-yellow-500 text-black font-bold text-xs px-4 py-2 hover:bg-yellow-400 transition-colors flex items-center gap-1"
+              >
+                NEW INTERVIEW <ArrowRight className="w-3 h-3" />
+              </button>
+            </motion.div>
           </>
         )}
       </div>

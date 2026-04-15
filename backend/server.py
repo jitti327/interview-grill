@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException
+from fastapi import FastAPI, APIRouter, HTTPException, Request
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -12,6 +12,7 @@ from typing import List, Optional
 import uuid
 from datetime import datetime, timezone
 from emergentintegrations.llm.chat import LlmChat, UserMessage
+from auth import auth_router, init_auth, seed_admin, get_optional_user
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -25,6 +26,9 @@ GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', '')
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
 
+# Initialize auth module
+init_auth(db)
+
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
@@ -35,6 +39,8 @@ class SessionCreate(BaseModel):
     category: str
     difficulty: str
     num_questions: int = 8
+    timed_mode: bool = False
+    time_per_question: int = 300
 
 
 class QuestionRequest(BaseModel):
@@ -127,13 +133,17 @@ async def root():
 
 
 @api_router.post("/sessions")
-async def create_session(data: SessionCreate):
+async def create_session(data: SessionCreate, request: Request):
+    user = await get_optional_user(request)
     session = {
         "id": str(uuid.uuid4()),
+        "user_id": user["_id"] if user else None,
         "tech_stack": data.tech_stack,
         "category": data.category,
         "difficulty": data.difficulty,
         "num_questions": data.num_questions,
+        "timed_mode": data.timed_mode,
+        "time_per_question": data.time_per_question,
         "questions_asked": 0,
         "status": "active",
         "avg_score": None,
@@ -370,7 +380,99 @@ async def category_stats():
     ]
 
 
+# --- Bookmarks ---
+class BookmarkCreate(BaseModel):
+    session_id: str
+    round_id: str
+
+
+@api_router.post("/bookmarks")
+async def create_bookmark(data: BookmarkCreate, request: Request):
+    user = await get_optional_user(request)
+    round_doc = await db.rounds.find_one({"id": data.round_id}, {"_id": 0})
+    if not round_doc:
+        raise HTTPException(404, "Round not found")
+    bookmark = {
+        "id": str(uuid.uuid4()),
+        "user_id": user["_id"] if user else None,
+        "session_id": data.session_id,
+        "round_id": data.round_id,
+        "question": round_doc.get("question", ""),
+        "topic": round_doc.get("topic", ""),
+        "question_type": round_doc.get("question_type", ""),
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.bookmarks.insert_one(bookmark)
+    bookmark.pop("_id", None)
+    return bookmark
+
+
+@api_router.get("/bookmarks")
+async def list_bookmarks(request: Request):
+    user = await get_optional_user(request)
+    query = {"user_id": user["_id"]} if user else {}
+    bookmarks = await db.bookmarks.find(query, {"_id": 0}).sort("created_at", -1).to_list(100)
+    return bookmarks
+
+
+@api_router.delete("/bookmarks/{bookmark_id}")
+async def delete_bookmark(bookmark_id: str):
+    result = await db.bookmarks.delete_one({"id": bookmark_id})
+    if result.deleted_count == 0:
+        raise HTTPException(404, "Bookmark not found")
+    return {"message": "Bookmark deleted"}
+
+
+# --- Session Comparison ---
+@api_router.get("/comparison")
+async def compare_sessions(session1: str, session2: str):
+    s1 = await db.sessions.find_one({"id": session1}, {"_id": 0})
+    s2 = await db.sessions.find_one({"id": session2}, {"_id": 0})
+    if not s1 or not s2:
+        raise HTTPException(404, "One or both sessions not found")
+    r1 = await db.rounds.find(
+        {"session_id": session1, "score": {"$ne": None}}, {"_id": 0}
+    ).sort("order", 1).to_list(100)
+    r2 = await db.rounds.find(
+        {"session_id": session2, "score": {"$ne": None}}, {"_id": 0}
+    ).sort("order", 1).to_list(100)
+
+    score_a = s1.get("avg_score") or 0
+    score_b = s2.get("avg_score") or 0
+    winner = "a" if score_a > score_b else ("b" if score_b > score_a else "tie")
+
+    return {
+        "session_a": s1,
+        "session_b": s2,
+        "rounds_a": r1,
+        "rounds_b": r2,
+        "winner": winner
+    }
+
+
+# --- Weak Topics ---
+@api_router.get("/dashboard/weak-topics")
+async def weak_topics():
+    pipeline = [
+        {"$match": {"score": {"$ne": None}, "topic": {"$ne": None}}},
+        {"$group": {
+            "_id": "$topic",
+            "avg_score": {"$avg": "$score"},
+            "count": {"$sum": 1}
+        }},
+        {"$match": {"count": {"$gte": 1}}},
+        {"$sort": {"avg_score": 1}},
+        {"$limit": 15}
+    ]
+    results = await db.rounds.aggregate(pipeline).to_list(15)
+    return [
+        {"topic": r["_id"], "avg_score": round(r["avg_score"], 1), "attempts": r["count"]}
+        for r in results
+    ]
+
+
 app.include_router(api_router)
+app.include_router(auth_router)
 
 app.add_middleware(
     CORSMiddleware,
@@ -379,6 +481,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.on_event("startup")
+async def startup():
+    await seed_admin()
+    logger.info("Admin seeded successfully")
 
 
 @app.on_event("shutdown")

@@ -2,13 +2,16 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
-import { getSession, generateQuestion, evaluateAnswer, completeSession } from "@/lib/api";
+import { getSession, generateQuestion, evaluateAnswer, completeSession, createBookmark } from "@/lib/api";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import CodeEditor from "@/components/CodeEditor";
+import InterviewTimer from "@/components/InterviewTimer";
 import {
   Loader2, Send, SkipForward, Square, Lightbulb,
-  CheckCircle, XCircle, AlertTriangle, ArrowRight, BarChart3
+  CheckCircle, XCircle, AlertTriangle, ArrowRight, BarChart3,
+  Bookmark, FileText
 } from "lucide-react";
 
 function ScoreBadge({ score }) {
@@ -46,6 +49,8 @@ export default function InterviewRoom() {
   const [showHint, setShowHint] = useState(false);
   const [interviewComplete, setInterviewComplete] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
+  const [useCodeEditor, setUseCodeEditor] = useState(false);
+  const [timerActive, setTimerActive] = useState(false);
 
   const scrollToBottom = useCallback(() => {
     setTimeout(() => {
@@ -85,10 +90,13 @@ export default function InterviewRoom() {
   const fetchNextQuestion = async () => {
     setLoadingQuestion(true);
     setShowHint(false);
+    setTimerActive(false);
     try {
       const res = await generateQuestion(sessionId);
       setCurrentRound(res.data);
       setRounds((prev) => [...prev, res.data]);
+      setUseCodeEditor(res.data.question_type === "coding");
+      if (session?.timed_mode) setTimerActive(true);
       scrollToBottom();
     } catch (err) {
       const msg = err?.response?.data?.detail || "Failed to generate question. AI may be busy — retrying helps.";
@@ -101,6 +109,7 @@ export default function InterviewRoom() {
   const handleSubmitAnswer = async () => {
     if (!answer.trim() || !currentRound) return;
     setEvaluating(true);
+    setTimerActive(false);
     try {
       const res = await evaluateAnswer(sessionId, currentRound.id, answer.trim());
       setRounds((prev) =>
@@ -131,6 +140,26 @@ export default function InterviewRoom() {
       toast.success("Interview completed!");
     } catch (err) {
       toast.error("Failed to complete session");
+    }
+  };
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const handleTimeUp = useCallback(() => {
+    if (answer.trim()) {
+      handleSubmitAnswer();
+    } else {
+      toast.error("Time's up! Moving to next question.");
+      setCurrentRound(null);
+      setTimerActive(false);
+    }
+  }, [answer]);
+
+  const handleBookmark = async (roundId) => {
+    try {
+      await createBookmark(sessionId, roundId);
+      toast.success("Question bookmarked!");
+    } catch {
+      toast.error("Failed to bookmark");
     }
   };
 
@@ -166,7 +195,23 @@ export default function InterviewRoom() {
           </span>
         </div>
         <div className="flex items-center gap-2">
+          {session.timed_mode && currentRound && !currentRound.answer && (
+            <InterviewTimer
+              timePerQuestion={session.time_per_question || 300}
+              onTimeUp={handleTimeUp}
+              isActive={timerActive}
+            />
+          )}
           {session.avg_score !== null && <ScoreBadge score={session.avg_score} />}
+          {interviewComplete && (
+            <button
+              data-testid="view-report-btn"
+              onClick={() => navigate(`/report/${sessionId}`)}
+              className="flex items-center gap-1 px-3 py-1 text-xs font-bold text-zinc-400 border border-[#27272A] hover:border-yellow-500 hover:text-yellow-500 transition-colors"
+            >
+              <FileText className="w-3 h-3" /> REPORT
+            </button>
+          )}
           {!interviewComplete && (
             <button
               data-testid="end-interview-btn"
@@ -227,6 +272,16 @@ export default function InterviewRoom() {
                       {round.question_type}
                     </Badge>
                     <span className="text-[10px] text-zinc-600">{round.topic}</span>
+                    {round.answer && (
+                      <button
+                        data-testid={`bookmark-btn-${round.id}`}
+                        onClick={() => handleBookmark(round.id)}
+                        className="ml-auto text-zinc-600 hover:text-yellow-500 transition-colors"
+                        title="Bookmark question"
+                      >
+                        <Bookmark className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </div>
                   <div className="ml-8 p-3 bg-[#121212] border border-[#27272A] text-sm text-zinc-200 leading-relaxed whitespace-pre-wrap">
                     {round.question}
@@ -376,6 +431,13 @@ export default function InterviewRoom() {
                   NEW INTERVIEW <ArrowRight className="w-3 h-3" />
                 </button>
                 <button
+                  data-testid="view-report-link"
+                  onClick={() => navigate(`/report/${sessionId}`)}
+                  className="border border-yellow-500/50 text-yellow-500 font-bold text-xs px-4 py-2 hover:bg-yellow-500/10 transition-colors flex items-center gap-1"
+                >
+                  <FileText className="w-3 h-3" /> VIEW REPORT
+                </button>
+                <button
                   data-testid="view-dashboard-btn"
                   onClick={() => navigate("/dashboard")}
                   className="border border-zinc-700 text-white font-bold text-xs px-4 py-2 hover:bg-zinc-800 transition-colors flex items-center gap-1"
@@ -411,18 +473,29 @@ export default function InterviewRoom() {
               </div>
             )}
             <div className="flex gap-2">
-              <textarea
-                data-testid="answer-textarea"
-                value={answer}
-                onChange={(e) => setAnswer(e.target.value)}
-                placeholder={currentRound ? "Type your answer..." : "Waiting for next question..."}
-                disabled={!currentRound || evaluating || loadingQuestion}
-                rows={3}
-                className="flex-1 bg-[#0A0A0A] border border-[#27272A] text-sm text-white p-3 resize-none focus:outline-none focus:border-yellow-500 placeholder-zinc-600 disabled:opacity-50"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && e.ctrlKey) handleSubmitAnswer();
-                }}
-              />
+              {useCodeEditor && currentRound && !currentRound.answer ? (
+                <div className="flex-1">
+                  <CodeEditor
+                    value={answer}
+                    onChange={(val) => setAnswer(val || "")}
+                    language={session.tech_stack?.toLowerCase().includes("python") ? "python" : "javascript"}
+                    height="200px"
+                  />
+                </div>
+              ) : (
+                <textarea
+                  data-testid="answer-textarea"
+                  value={answer}
+                  onChange={(e) => setAnswer(e.target.value)}
+                  placeholder={currentRound ? "Type your answer..." : "Waiting for next question..."}
+                  disabled={!currentRound || evaluating || loadingQuestion}
+                  rows={3}
+                  className="flex-1 bg-[#0A0A0A] border border-[#27272A] text-sm text-white p-3 resize-none focus:outline-none focus:border-yellow-500 placeholder-zinc-600 disabled:opacity-50"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && e.ctrlKey) handleSubmitAnswer();
+                  }}
+                />
+              )}
               <div className="flex flex-col gap-2">
                 {currentRound && !currentRound.answer ? (
                   <button

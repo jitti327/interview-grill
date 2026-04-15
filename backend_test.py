@@ -1,231 +1,344 @@
 #!/usr/bin/env python3
 
 import requests
-import json
 import sys
-import time
+import json
 from datetime import datetime
+import time
 
 class DevGrillAPITester:
-    def __init__(self, base_url="https://dev-grill-ai.preview.emergentagent.com/api"):
+    def __init__(self, base_url="https://dev-grill-ai.preview.emergentagent.com"):
         self.base_url = base_url
         self.session = requests.Session()
         self.session.headers.update({'Content-Type': 'application/json'})
         self.tests_run = 0
         self.tests_passed = 0
+        self.user_id = None
         self.session_id = None
         self.round_id = None
+        self.bookmark_id = None
 
-    def log(self, message, level="INFO"):
-        timestamp = datetime.now().strftime("%H:%M:%S")
-        print(f"[{timestamp}] {level}: {message}")
-
-    def run_test(self, name, method, endpoint, expected_status=200, data=None, timeout=30):
-        """Run a single API test"""
-        url = f"{self.base_url}/{endpoint}"
+    def log_test(self, name, success, details=""):
+        """Log test result"""
         self.tests_run += 1
-        
-        self.log(f"🔍 Testing {name}...")
-        self.log(f"   {method} {url}")
-        
+        if success:
+            self.tests_passed += 1
+            print(f"✅ {name}")
+        else:
+            print(f"❌ {name} - {details}")
+        return success
+
+    def test_api_root(self):
+        """Test API root endpoint"""
         try:
-            if method == 'GET':
-                response = self.session.get(url, timeout=timeout)
-            elif method == 'POST':
-                response = self.session.post(url, json=data, timeout=timeout)
-            elif method == 'PUT':
-                response = self.session.put(url, json=data, timeout=timeout)
-            elif method == 'DELETE':
-                response = self.session.delete(url, timeout=timeout)
-
-            success = response.status_code == expected_status
-            
-            if success:
-                self.tests_passed += 1
-                self.log(f"✅ {name} - Status: {response.status_code}", "PASS")
-                try:
-                    return True, response.json()
-                except:
-                    return True, response.text
-            else:
-                self.log(f"❌ {name} - Expected {expected_status}, got {response.status_code}", "FAIL")
-                self.log(f"   Response: {response.text[:200]}", "ERROR")
-                return False, {}
-
-        except requests.exceptions.Timeout:
-            self.log(f"❌ {name} - Request timeout after {timeout}s", "FAIL")
-            return False, {}
+            response = self.session.get(f"{self.base_url}/api/")
+            success = response.status_code == 200 and "DevGrill AI API" in response.text
+            return self.log_test("API Root", success, f"Status: {response.status_code}")
         except Exception as e:
-            self.log(f"❌ {name} - Error: {str(e)}", "FAIL")
-            return False, {}
+            return self.log_test("API Root", False, str(e))
 
-    def test_root_endpoint(self):
-        """Test the root API endpoint"""
-        return self.run_test("Root API", "GET", "")
+    def test_register(self):
+        """Test user registration"""
+        try:
+            timestamp = int(time.time())
+            data = {
+                "email": f"test_{timestamp}@devgrill.com",
+                "password": "test123456",
+                "name": f"Test User {timestamp}"
+            }
+            response = self.session.post(f"{self.base_url}/api/auth/register", json=data)
+            success = response.status_code == 200
+            if success:
+                user_data = response.json()
+                self.user_id = user_data.get("id")
+            return self.log_test("User Registration", success, f"Status: {response.status_code}")
+        except Exception as e:
+            return self.log_test("User Registration", False, str(e))
+
+    def test_login_admin(self):
+        """Test admin login"""
+        try:
+            data = {
+                "email": "admin@devgrill.com",
+                "password": "admin123"
+            }
+            response = self.session.post(f"{self.base_url}/api/auth/login", json=data)
+            success = response.status_code == 200
+            if success:
+                user_data = response.json()
+                self.user_id = user_data.get("id")
+            return self.log_test("Admin Login", success, f"Status: {response.status_code}")
+        except Exception as e:
+            return self.log_test("Admin Login", False, str(e))
+
+    def test_get_me(self):
+        """Test get current user"""
+        try:
+            response = self.session.get(f"{self.base_url}/api/auth/me")
+            success = response.status_code == 200
+            if success:
+                user_data = response.json()
+                success = "email" in user_data
+            return self.log_test("Get Current User", success, f"Status: {response.status_code}")
+        except Exception as e:
+            return self.log_test("Get Current User", False, str(e))
 
     def test_create_session(self):
-        """Test creating a new interview session"""
-        session_data = {
-            "tech_stack": "React",
-            "category": "frontend",
-            "difficulty": "intermediate",
-            "num_questions": 5
-        }
-        
-        success, response = self.run_test(
-            "Create Session", 
-            "POST", 
-            "sessions", 
-            200, 
-            session_data
-        )
-        
-        if success and 'id' in response:
-            self.session_id = response['id']
-            self.log(f"   Session ID: {self.session_id}")
-            return True
-        return False
-
-    def test_get_session(self):
-        """Test retrieving a session by ID"""
-        if not self.session_id:
-            self.log("❌ No session ID available for testing", "FAIL")
-            return False
-            
-        return self.run_test(
-            "Get Session", 
-            "GET", 
-            f"sessions/{self.session_id}"
-        )[0]
+        """Test session creation with timed mode"""
+        try:
+            data = {
+                "tech_stack": "React",
+                "category": "frontend",
+                "difficulty": "intermediate",
+                "num_questions": 5,
+                "timed_mode": True,
+                "time_per_question": 300
+            }
+            response = self.session.post(f"{self.base_url}/api/sessions", json=data)
+            success = response.status_code == 200
+            if success:
+                session_data = response.json()
+                self.session_id = session_data.get("id")
+                # Verify timed mode fields are present
+                success = (session_data.get("timed_mode") == True and 
+                          session_data.get("time_per_question") == 300)
+            return self.log_test("Create Session (Timed Mode)", success, f"Status: {response.status_code}")
+        except Exception as e:
+            return self.log_test("Create Session (Timed Mode)", False, str(e))
 
     def test_list_sessions(self):
-        """Test listing all sessions"""
-        return self.run_test("List Sessions", "GET", "sessions")[0]
+        """Test listing sessions"""
+        try:
+            response = self.session.get(f"{self.base_url}/api/sessions")
+            success = response.status_code == 200
+            if success:
+                sessions = response.json()
+                success = isinstance(sessions, list)
+            return self.log_test("List Sessions", success, f"Status: {response.status_code}")
+        except Exception as e:
+            return self.log_test("List Sessions", False, str(e))
+
+    def test_get_session(self):
+        """Test getting session details"""
+        if not self.session_id:
+            return self.log_test("Get Session", False, "No session ID available")
+        try:
+            response = self.session.get(f"{self.base_url}/api/sessions/{self.session_id}")
+            success = response.status_code == 200
+            if success:
+                data = response.json()
+                success = "session" in data and "rounds" in data
+            return self.log_test("Get Session", success, f"Status: {response.status_code}")
+        except Exception as e:
+            return self.log_test("Get Session", False, str(e))
 
     def test_generate_question(self):
-        """Test AI question generation"""
+        """Test question generation"""
         if not self.session_id:
-            self.log("❌ No session ID available for testing", "FAIL")
-            return False
-            
-        question_data = {"session_id": self.session_id}
-        
-        # AI generation might take longer
-        success, response = self.run_test(
-            "Generate Question", 
-            "POST", 
-            "interview/question", 
-            200, 
-            question_data,
-            timeout=60
-        )
-        
-        if success and 'id' in response:
-            self.round_id = response['id']
-            self.log(f"   Round ID: {self.round_id}")
-            self.log(f"   Question: {response.get('question', 'N/A')[:100]}...")
-            return True
-        return False
+            return self.log_test("Generate Question", False, "No session ID available")
+        try:
+            data = {"session_id": self.session_id}
+            response = self.session.post(f"{self.base_url}/api/interview/question", json=data)
+            success = response.status_code == 200
+            if success:
+                question_data = response.json()
+                self.round_id = question_data.get("id")
+                success = "question" in question_data and "topic" in question_data
+            return self.log_test("Generate Question", success, f"Status: {response.status_code}")
+        except Exception as e:
+            return self.log_test("Generate Question", False, str(e))
 
     def test_evaluate_answer(self):
-        """Test AI answer evaluation"""
+        """Test answer evaluation"""
         if not self.session_id or not self.round_id:
-            self.log("❌ No session/round ID available for testing", "FAIL")
-            return False
-            
-        answer_data = {
-            "session_id": self.session_id,
-            "round_id": self.round_id,
-            "answer": "React is a JavaScript library for building user interfaces. It uses a component-based architecture and virtual DOM for efficient rendering. Key concepts include JSX, props, state, and hooks like useState and useEffect."
-        }
-        
-        # AI evaluation might take longer
-        success, response = self.run_test(
-            "Evaluate Answer", 
-            "POST", 
-            "interview/evaluate", 
-            200, 
-            answer_data,
-            timeout=60
-        )
-        
-        if success:
-            score = response.get('score', 'N/A')
-            feedback = response.get('feedback', 'N/A')
-            self.log(f"   Score: {score}/10")
-            self.log(f"   Feedback: {feedback[:100]}...")
-            return True
-        return False
+            return self.log_test("Evaluate Answer", False, "Missing session or round ID")
+        try:
+            data = {
+                "session_id": self.session_id,
+                "round_id": self.round_id,
+                "answer": "This is a test answer for React components and state management."
+            }
+            response = self.session.post(f"{self.base_url}/api/interview/evaluate", json=data)
+            success = response.status_code == 200
+            if success:
+                eval_data = response.json()
+                success = "score" in eval_data and "feedback" in eval_data
+            return self.log_test("Evaluate Answer", success, f"Status: {response.status_code}")
+        except Exception as e:
+            return self.log_test("Evaluate Answer", False, str(e))
 
-    def test_complete_session(self):
-        """Test completing a session"""
-        if not self.session_id:
-            self.log("❌ No session ID available for testing", "FAIL")
-            return False
-            
-        return self.run_test(
-            "Complete Session", 
-            "POST", 
-            f"sessions/{self.session_id}/complete"
-        )[0]
+    def test_create_bookmark(self):
+        """Test bookmark creation"""
+        if not self.session_id or not self.round_id:
+            return self.log_test("Create Bookmark", False, "Missing session or round ID")
+        try:
+            data = {
+                "session_id": self.session_id,
+                "round_id": self.round_id
+            }
+            response = self.session.post(f"{self.base_url}/api/bookmarks", json=data)
+            success = response.status_code == 200
+            if success:
+                bookmark_data = response.json()
+                self.bookmark_id = bookmark_data.get("id")
+                success = "question" in bookmark_data and "topic" in bookmark_data
+            return self.log_test("Create Bookmark", success, f"Status: {response.status_code}")
+        except Exception as e:
+            return self.log_test("Create Bookmark", False, str(e))
+
+    def test_list_bookmarks(self):
+        """Test listing bookmarks"""
+        try:
+            response = self.session.get(f"{self.base_url}/api/bookmarks")
+            success = response.status_code == 200
+            if success:
+                bookmarks = response.json()
+                success = isinstance(bookmarks, list)
+            return self.log_test("List Bookmarks", success, f"Status: {response.status_code}")
+        except Exception as e:
+            return self.log_test("List Bookmarks", False, str(e))
 
     def test_dashboard_overview(self):
-        """Test dashboard overview endpoint"""
-        return self.run_test("Dashboard Overview", "GET", "dashboard/overview")[0]
+        """Test dashboard overview"""
+        try:
+            response = self.session.get(f"{self.base_url}/api/dashboard/overview")
+            success = response.status_code == 200
+            if success:
+                data = response.json()
+                success = "total_sessions" in data and "completed_sessions" in data
+            return self.log_test("Dashboard Overview", success, f"Status: {response.status_code}")
+        except Exception as e:
+            return self.log_test("Dashboard Overview", False, str(e))
+
+    def test_weak_topics(self):
+        """Test weak topics endpoint"""
+        try:
+            response = self.session.get(f"{self.base_url}/api/dashboard/weak-topics")
+            success = response.status_code == 200
+            if success:
+                data = response.json()
+                success = isinstance(data, list)
+            return self.log_test("Weak Topics", success, f"Status: {response.status_code}")
+        except Exception as e:
+            return self.log_test("Weak Topics", False, str(e))
 
     def test_skill_radar(self):
         """Test skill radar endpoint"""
-        return self.run_test("Skill Radar", "GET", "dashboard/skill-radar")[0]
+        try:
+            response = self.session.get(f"{self.base_url}/api/dashboard/skill-radar")
+            success = response.status_code == 200
+            if success:
+                data = response.json()
+                success = isinstance(data, list)
+            return self.log_test("Skill Radar", success, f"Status: {response.status_code}")
+        except Exception as e:
+            return self.log_test("Skill Radar", False, str(e))
 
     def test_score_trend(self):
         """Test score trend endpoint"""
-        return self.run_test("Score Trend", "GET", "dashboard/trend")[0]
+        try:
+            response = self.session.get(f"{self.base_url}/api/dashboard/trend")
+            success = response.status_code == 200
+            if success:
+                data = response.json()
+                success = isinstance(data, list)
+            return self.log_test("Score Trend", success, f"Status: {response.status_code}")
+        except Exception as e:
+            return self.log_test("Score Trend", False, str(e))
 
-    def test_category_stats(self):
-        """Test category stats endpoint"""
-        return self.run_test("Category Stats", "GET", "dashboard/category-stats")[0]
+    def test_session_comparison(self):
+        """Test session comparison"""
+        if not self.session_id:
+            return self.log_test("Session Comparison", False, "No session ID available")
+        try:
+            # Use the same session for both parameters for testing
+            response = self.session.get(f"{self.base_url}/api/comparison", 
+                                      params={"session1": self.session_id, "session2": self.session_id})
+            success = response.status_code == 200
+            if success:
+                data = response.json()
+                success = "session_a" in data and "session_b" in data and "winner" in data
+            return self.log_test("Session Comparison", success, f"Status: {response.status_code}")
+        except Exception as e:
+            return self.log_test("Session Comparison", False, str(e))
+
+    def test_complete_session(self):
+        """Test session completion"""
+        if not self.session_id:
+            return self.log_test("Complete Session", False, "No session ID available")
+        try:
+            response = self.session.post(f"{self.base_url}/api/sessions/{self.session_id}/complete")
+            success = response.status_code == 200
+            if success:
+                data = response.json()
+                success = data.get("session", {}).get("status") == "completed"
+            return self.log_test("Complete Session", success, f"Status: {response.status_code}")
+        except Exception as e:
+            return self.log_test("Complete Session", False, str(e))
+
+    def test_logout(self):
+        """Test logout"""
+        try:
+            response = self.session.post(f"{self.base_url}/api/auth/logout")
+            success = response.status_code == 200
+            return self.log_test("Logout", success, f"Status: {response.status_code}")
+        except Exception as e:
+            return self.log_test("Logout", False, str(e))
 
     def run_all_tests(self):
-        """Run all API tests in sequence"""
-        self.log("🚀 Starting DevGrill AI API Tests")
-        self.log(f"   Base URL: {self.base_url}")
+        """Run all tests in sequence"""
+        print("🚀 Starting DevGrill AI API Tests")
+        print("=" * 50)
         
-        # Basic API tests
-        self.test_root_endpoint()
+        # Basic API test
+        self.test_api_root()
         
-        # Session management tests
+        # Auth flow
+        self.test_register()
+        self.test_login_admin()
+        self.test_get_me()
+        
+        # Session management
         self.test_create_session()
-        self.test_get_session()
         self.test_list_sessions()
+        self.test_get_session()
         
-        # AI interaction tests (these might take longer)
-        if self.session_id:
-            self.log("⏳ Testing AI features (may take 30-60 seconds)...")
-            self.test_generate_question()
-            self.test_evaluate_answer()
-            self.test_complete_session()
+        # Interview flow
+        self.test_generate_question()
+        time.sleep(2)  # Wait for AI processing
+        self.test_evaluate_answer()
         
-        # Dashboard tests
+        # Bookmarks
+        self.test_create_bookmark()
+        self.test_list_bookmarks()
+        
+        # Dashboard analytics
         self.test_dashboard_overview()
+        self.test_weak_topics()
         self.test_skill_radar()
         self.test_score_trend()
-        self.test_category_stats()
         
-        # Print summary
-        self.log("=" * 50)
-        self.log(f"📊 Test Results: {self.tests_passed}/{self.tests_run} passed")
+        # Session comparison
+        self.test_session_comparison()
         
-        if self.tests_passed == self.tests_run:
-            self.log("🎉 All tests passed!", "SUCCESS")
-            return 0
-        else:
-            failed = self.tests_run - self.tests_passed
-            self.log(f"💥 {failed} test(s) failed", "ERROR")
-            return 1
+        # Complete session
+        self.test_complete_session()
+        
+        # Logout
+        self.test_logout()
+        
+        # Results
+        print("=" * 50)
+        print(f"📊 Tests completed: {self.tests_passed}/{self.tests_run} passed")
+        success_rate = (self.tests_passed / self.tests_run) * 100 if self.tests_run > 0 else 0
+        print(f"📈 Success rate: {success_rate:.1f}%")
+        
+        return self.tests_passed == self.tests_run
 
 def main():
     tester = DevGrillAPITester()
-    return tester.run_all_tests()
+    success = tester.run_all_tests()
+    return 0 if success else 1
 
 if __name__ == "__main__":
     sys.exit(main())

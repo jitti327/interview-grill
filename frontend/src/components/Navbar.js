@@ -1,15 +1,21 @@
 import { Link, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Terminal, BarChart3, Clock, Zap } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import { Terminal, BarChart3, Clock, Zap, ArrowLeftRight, User, LogOut } from "lucide-react";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger
+} from "@/components/ui/dropdown-menu";
 
 export default function Navbar() {
   const location = useLocation();
+  const { user, logout } = useAuth();
   const isActive = (path) => location.pathname === path;
 
   const links = [
     { path: "/", label: "HOME", icon: Terminal },
     { path: "/dashboard", label: "DASHBOARD", icon: BarChart3 },
     { path: "/history", label: "HISTORY", icon: Clock },
+    { path: "/compare", label: "COMPARE", icon: ArrowLeftRight },
   ];
 
   return (
@@ -43,15 +49,43 @@ export default function Navbar() {
           ))}
         </div>
 
-        <Link to="/setup" data-testid="nav-start-interview-btn">
-          <motion.button
-            whileHover={{ y: -1 }}
-            whileTap={{ scale: 0.98 }}
-            className="bg-yellow-500 text-black font-bold text-xs tracking-[0.1em] px-4 py-2 hover:bg-yellow-400 transition-colors"
-          >
-            START INTERVIEW
-          </motion.button>
-        </Link>
+        <div className="flex items-center gap-3">
+          {user ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger data-testid="user-menu-trigger" className="flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-zinc-400 border border-[#27272A] hover:border-zinc-600 transition-colors">
+                <User className="w-3.5 h-3.5" />
+                {user.name || user.email}
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="bg-[#121212] border-[#27272A] text-white rounded-sm">
+                <DropdownMenuItem className="text-xs text-zinc-400 focus:bg-zinc-800 focus:text-white cursor-default">
+                  {user.email}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  data-testid="logout-btn"
+                  onClick={logout}
+                  className="text-xs text-red-400 focus:bg-red-400/10 focus:text-red-400 cursor-pointer"
+                >
+                  <LogOut className="w-3 h-3 mr-2" /> Sign Out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <Link to="/login" data-testid="nav-login-btn">
+              <button className="border border-zinc-700 text-white font-bold text-xs tracking-[0.1em] px-3 py-1.5 hover:bg-zinc-800 transition-colors">
+                SIGN IN
+              </button>
+            </Link>
+          )}
+          <Link to="/setup" data-testid="nav-start-interview-btn">
+            <motion.button
+              whileHover={{ y: -1 }}
+              whileTap={{ scale: 0.98 }}
+              className="bg-yellow-500 text-black font-bold text-xs tracking-[0.1em] px-4 py-2 hover:bg-yellow-400 transition-colors"
+            >
+              START INTERVIEW
+            </motion.button>
+          </Link>
+        </div>
       </div>
     </nav>
   );

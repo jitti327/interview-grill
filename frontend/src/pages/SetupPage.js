@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { createSession } from "@/lib/api";
-import { ArrowRight, Loader2 } from "lucide-react";
+import { ArrowRight, Loader2, Clock, Timer } from "lucide-react";
 
 const CATEGORIES = {
   frontend: { label: "Frontend", stacks: ["React", "Angular", "Vue", "Ember"] },
@@ -30,6 +30,8 @@ export default function SetupPage() {
   const [techStack, setTechStack] = useState("");
   const [difficulty, setDifficulty] = useState("");
   const [numQuestions, setNumQuestions] = useState(8);
+  const [timedMode, setTimedMode] = useState(false);
+  const [timePerQuestion, setTimePerQuestion] = useState(300);
   const [loading, setLoading] = useState(false);
 
   const currentStacks = category ? CATEGORIES[category]?.stacks || [] : [];
@@ -46,6 +48,8 @@ export default function SetupPage() {
         category,
         difficulty,
         num_questions: numQuestions,
+        timed_mode: timedMode,
+        time_per_question: timePerQuestion,
       });
       toast.success("Interview session created!");
       navigate(`/interview/${res.data.id}`);
@@ -167,7 +171,7 @@ export default function SetupPage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
-          className="mb-10"
+          className="mb-8"
         >
           <label className="text-xs tracking-[0.2em] uppercase font-bold text-zinc-400 block mb-3">
             NUMBER OF QUESTIONS
@@ -187,6 +191,50 @@ export default function SetupPage() {
                 {n}
               </button>
             ))}
+          </div>
+        </motion.div>
+
+        {/* Timed Mode */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.35 }}
+          className="mb-10"
+        >
+          <label className="text-xs tracking-[0.2em] uppercase font-bold text-zinc-400 block mb-3">
+            TIMED MODE
+          </label>
+          <div className="flex items-center gap-4">
+            <button
+              data-testid="setup-timed-toggle"
+              onClick={() => setTimedMode(!timedMode)}
+              className={`flex items-center gap-2 px-4 py-3 border text-xs font-bold transition-all ${
+                timedMode
+                  ? "border-yellow-500 bg-yellow-500/10 text-yellow-500"
+                  : "border-[#27272A] bg-[#121212] text-zinc-400 hover:border-zinc-600"
+              }`}
+            >
+              <Timer className="w-4 h-4" />
+              {timedMode ? "TIMER ON" : "TIMER OFF"}
+            </button>
+            {timedMode && (
+              <div className="flex gap-2">
+                {[120, 180, 300, 600].map((t) => (
+                  <button
+                    key={t}
+                    data-testid={`setup-time-${t}`}
+                    onClick={() => setTimePerQuestion(t)}
+                    className={`px-3 py-3 border text-xs font-bold transition-all ${
+                      timePerQuestion === t
+                        ? "border-yellow-500 bg-yellow-500/10 text-yellow-500"
+                        : "border-[#27272A] bg-[#121212] text-zinc-400 hover:border-zinc-600"
+                    }`}
+                  >
+                    {t >= 60 ? `${t / 60}m` : `${t}s`}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </motion.div>
 
