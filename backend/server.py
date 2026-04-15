@@ -96,14 +96,28 @@ Evaluate thoroughly and respond in ONLY valid JSON (no markdown, no extra text):
 {{"score":<number 0 to 10>,"feedback":"detailed evaluation feedback","strengths":["strength1","strength2"],"weaknesses":["weakness1","weakness2"],"follow_up_question":"a grilling follow-up question","improvement_suggestions":["suggestion1","suggestion2"],"verdict":"strong|acceptable|needs_improvement|poor"}}"""
 
 
-async def call_gemini(system_prompt, user_text):
-    chat = LlmChat(
-        api_key=GEMINI_API_KEY,
-        session_id=str(uuid.uuid4()),
-        system_message=system_prompt
-    ).with_model("gemini", "gemini-2.5-flash")
-    response = await chat.send_message(UserMessage(text=user_text))
-    return response
+GEMINI_MODELS = ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash"]
+
+async def call_gemini(system_prompt, user_text, retries=3):
+    import asyncio
+    last_error = None
+    for model in GEMINI_MODELS:
+        for attempt in range(retries):
+            try:
+                chat = LlmChat(
+                    api_key=GEMINI_API_KEY,
+                    session_id=str(uuid.uuid4()),
+                    system_message=system_prompt
+                ).with_model("gemini", model)
+                response = await chat.send_message(UserMessage(text=user_text))
+                return response
+            except Exception as e:
+                last_error = e
+                logger.warning(f"Gemini call failed (model={model}, attempt={attempt+1}): {e}")
+                if attempt < retries - 1:
+                    await asyncio.sleep(1.5 * (attempt + 1))
+        logger.info(f"Model {model} exhausted retries, trying next model...")
+    raise last_error or Exception("All Gemini models failed")
 
 
 # --- Routes ---

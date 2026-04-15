@@ -79,6 +79,7 @@ export default function InterviewRoom() {
       }
     };
     load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId]);
 
   const fetchNextQuestion = async () => {
@@ -90,7 +91,8 @@ export default function InterviewRoom() {
       setRounds((prev) => [...prev, res.data]);
       scrollToBottom();
     } catch (err) {
-      toast.error("Failed to generate question");
+      const msg = err?.response?.data?.detail || "Failed to generate question. AI may be busy — retrying helps.";
+      toast.error(msg);
     } finally {
       setLoadingQuestion(false);
     }
@@ -114,7 +116,8 @@ export default function InterviewRoom() {
         await handleEndInterview();
       }
     } catch (err) {
-      toast.error("Failed to evaluate answer");
+      const msg = err?.response?.data?.detail || "Failed to evaluate answer. AI may be busy — try again.";
+      toast.error(msg);
     } finally {
       setEvaluating(false);
     }
