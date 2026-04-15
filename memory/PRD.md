@@ -1,38 +1,29 @@
 # DevGrill AI - Interview Preparation Platform
 
-## Problem Statement
-AI-powered Interview Preparation Platform for developers with tech stack-based prep, AI interview engine, grilling system, performance tracking & dashboard.
-
-## Architecture (Updated Feb 2026)
-- **Backend**: NestJS (TypeScript) — Migrated from Python/FastAPI
-  - Modules: Auth, Interview, Dashboard, Bookmarks, AI
-  - Services + Controllers pattern per NestJS best practices
-  - Port 8001, /api global prefix
-- **Frontend**: React + Tailwind CSS + Shadcn UI + Framer Motion + Recharts
-- **Database**: MongoDB via @nestjs/mongoose (collections: users, sessions, rounds, bookmarks)
-- **AI**: Gemini via @google/generative-ai (2.5-flash → 2.5-pro → 2.0-flash fallback)
+## Architecture
+- **Backend**: NestJS (TypeScript) — Modules/Services/Controllers
+- **Frontend**: React + Tailwind + Shadcn UI + Framer Motion + Recharts
+- **Database**: MongoDB via @nestjs/mongoose
+- **AI**: Gemini via @google/generative-ai (2.5-flash/pro/2.0-flash fallback)
 - **Auth**: JWT httpOnly cookies via @nestjs/jwt
+- **Docs**: Swagger/OpenAPI at /api/docs
 
-## What's Been Implemented
+## All Implemented Features
 - NestJS backend with clean module architecture
-- JWT auth (register/login/logout/me/refresh) with admin seeding
-- AI interview engine with dynamic question generation
-- Adaptive grilling (beginner/intermediate/advanced)
-- Monaco code editor for coding questions
-- Timed interview mode with countdown timer
-- Performance dashboard (radar, trends, weak topics)
-- Session comparison view
-- Question bookmarks
-- Shareable session report with print/PDF support
-- Dark brutalist UI (Outfit + JetBrains Mono fonts)
+- JWT Auth (register/login/logout/me/refresh) + admin seeding
+- AI Interview Engine (dynamic question generation, answer eval, grilling)
+- Adaptive difficulty (beginner=guided, intermediate=moderate, advanced=aggressive)
+- Monaco Code Editor with smart language detection per tech stack
+- Timed interview mode with countdown + auto-submit on time-up
+- Performance Dashboard (radar chart, score trends, weak topics bar chart)
+- Session Comparison view (side-by-side)
+- Leaderboard / Rankings (user rankings by avg score)
+- AI Coach Study Plan (AI-generated weekly study plan from weak areas)
+- Question Bookmarks
+- Shareable Session Report with print/PDF support
+- Swagger/OpenAPI documentation
+- Dark brutalist UI (Outfit + JetBrains Mono, yellow accents)
 
-## Prioritized Backlog
-### P1
-- Code editor language detection per tech stack
-- Spaced repetition for weak areas
-- Leaderboard / competitive mode
-
-### P2
-- Export report as styled PDF
-- Timed mode auto-submit on time-up
-- WebSocket for real-time AI streaming
+## Build Commands
+- Backend build: cd /app/backend && npx nest build
+- Backend restart: sudo supervisorctl restart backend
