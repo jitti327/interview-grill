@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
-import { getSession, generateQuestion, evaluateAnswer, completeSession, createBookmark, uploadAnswerAudio } from "@/lib/api";
+import { getSession, generateQuestion, evaluateAnswer, completeSession, createBookmark, uploadAnswerAudio, getQuestions, createRound } from "@/lib/api";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -55,6 +55,9 @@ export default function InterviewRoom() {
   const [useCodeEditor, setUseCodeEditor] = useState(false);
   const [timerActive, setTimerActive] = useState(false);
   const [recordedAudioUrl, setRecordedAudioUrl] = useState("");
+  const [cachedQuestions, setCachedQuestions] = useState([]);
+  const [questionLoadError, setQuestionLoadError] = useState("");
+  const [usedQuestionIds, setUsedQuestionIds] = useState([]);
 
   useEffect(() => {
     answerRef.current = answer;
@@ -295,12 +298,37 @@ export default function InterviewRoom() {
     const load = async () => {
       try {
         const res = await getSession(sessionId);
-        setSession(res.data.session);
+        const fetchedSession = res.data.session;
+        setSession(fetchedSession);
         setRounds(res.data.rounds);
-        if (res.data.session.status === "completed") {
+        setUsedQuestionIds(
+          (res.data.rounds || [])
+            .map((round) => round.question_id)
+            .filter(Boolean)
+        );
+        
+        let localQuestions = [];
+        if (fetchedSession.status !== "completed") {
+          try {
+            const questionPoolLimit = Math.max((fetchedSession.num_questions || 10) * 3, 20);
+            const qRes = await getQuestions(fetchedSession.tech_stack, questionPoolLimit);
+            localQuestions = qRes.data || [];
+            if (localQuestions.length === 0) {
+              const fallbackRes = await getQuestions(undefined, questionPoolLimit);
+              localQuestions = fallbackRes.data || [];
+            }
+            setCachedQuestions(localQuestions);
+            setQuestionLoadError("");
+          } catch (error) {
+            setQuestionLoadError("Failed to load interview questions.");
+            toast.error("Failed to load interview questions");
+          }
+        }
+
+        if (fetchedSession.status === "completed") {
           setInterviewComplete(true);
         } else if (res.data.rounds.length === 0) {
-          fetchNextQuestion();
+          fetchNextQuestion(localQuestions, fetchedSession);
         } else {
           const lastRound = res.data.rounds[res.data.rounds.length - 1];
           if (!lastRound.answer) {
@@ -317,19 +345,37 @@ export default function InterviewRoom() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId]);
 
-  const fetchNextQuestion = async () => {
+  const fetchNextQuestion = async (customQuestionsList = null, curSession = null) => {
     setLoadingQuestion(true);
     setShowHint(false);
     setTimerActive(false);
     try {
-      const res = await generateQuestion(sessionId);
+      const qs = customQuestionsList || cachedQuestions;
+      const s = curSession || session;
+      const usedIds = new Set(
+        (usedQuestionIds || []).concat((rounds || []).map((r) => r.question_id).filter(Boolean))
+      );
+      const question = qs.find((q) => q?.id && !usedIds.has(q.id));
+      
+      if (!question) {
+        const msg = questionLoadError || "No more questions available for this interview.";
+        toast.error(msg);
+        setLoadingQuestion(false);
+        return;
+      }
+      
+      const res = await createRound(sessionId, question.id);
       setCurrentRound(res.data);
       setRounds((prev) => [...prev, res.data]);
       setUseCodeEditor(res.data.question_type === "coding");
-      if (session?.timed_mode) setTimerActive(true);
+      setSession(prev => ({ ...prev, questions_asked: res.data.order }));
+      setUsedQuestionIds((prev) => [...new Set([...prev, question.id])]);
+      setCachedQuestions((prev) => prev.filter((item) => item.id !== question.id));
+
+      if (s?.timed_mode) setTimerActive(true);
       scrollToBottom();
     } catch (err) {
-      const msg = err?.response?.data?.detail || "Failed to generate question. AI may be busy — retrying helps.";
+      const msg = err?.response?.data?.detail || "Failed to load question. Please try again.";
       toast.error(msg);
     } finally {
       setLoadingQuestion(false);
@@ -519,17 +565,17 @@ export default function InterviewRoom() {
     }
   };
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   const handleTimeUp = useCallback(() => {
-    if (answer.trim() && currentRound) {
-      toast.warning("Time's up! Auto-submitting your answer...");
+    if (currentRoundRef.current) {
+      if (answerRef.current.trim()) {
+        toast.warning("Time's up! Auto-submitting your answer...");
+      } else {
+        toast.error("Time's up! Submitting empty answer...");
+        answerRef.current = "I ran out of time and couldn't provide an answer.";
+      }
       handleSubmitAnswer();
-    } else {
-      toast.error("Time's up! No answer submitted. Moving on.");
-      setCurrentRound(null);
-      setTimerActive(false);
     }
-  }, [answer, currentRound, handleSubmitAnswer]);
+  }, [handleSubmitAnswer]);
 
   const handleBookmark = async (roundId) => {
     try {
@@ -776,7 +822,13 @@ export default function InterviewRoom() {
           {loadingQuestion && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center gap-2 ml-8 text-xs text-zinc-500">
               <Loader2 className="w-3 h-3 animate-spin text-yellow-500" />
-              AI is preparing your next question...
+              Loading next question...
+            </motion.div>
+          )}
+
+          {!loadingQuestion && questionLoadError && cachedQuestions.length === 0 && !currentRound && !interviewComplete && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="ml-8 text-xs text-red-400">
+              {questionLoadError}
             </motion.div>
           )}
 

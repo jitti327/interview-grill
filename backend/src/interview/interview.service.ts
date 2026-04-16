@@ -3,6 +3,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { v4 as uuidv4 } from 'uuid';
 import { AiService } from '../ai/ai.service';
+import { QuestionsService } from '../questions/questions.service';
 import { Session } from '../schemas/session.schema';
 import { Round } from '../schemas/round.schema';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -13,6 +14,7 @@ export class InterviewService {
     @InjectModel(Session.name) private sessionModel: Model<Session>,
     @InjectModel(Round.name) private roundModel: Model<Round>,
     private aiService: AiService,
+    private questionsService: QuestionsService,
     @Inject(forwardRef(() => NotificationsService)) private notifService: NotificationsService,
   ) {}
 
@@ -54,27 +56,40 @@ export class InterviewService {
     if (!session) throw new HttpException('Session not found', 404);
     if (session.status !== 'active') throw new HttpException('Session is not active', 400);
 
-    const pastRounds = await this.roundModel.find({ session_id: sessionId }, { question: 1, order: 1 }).sort({ order: 1 }).lean();
-    const pastQuestions = pastRounds.map((r) => r.question);
-
-    const prompt = this.buildQuestionPrompt(session.tech_stack, session.category, session.difficulty, pastQuestions);
+    const pastRounds = await this.roundModel.find({ session_id: sessionId }, { question: 1, order: 1, question_id: 1 }).sort({ order: 1 }).lean();
+    const pastQuestionTexts = pastRounds.map((r) => r.question);
+    const usedQuestionIds = pastRounds.map((r: any) => r.question_id).filter(Boolean);
 
     try {
-      const response = await this.aiService.generate(prompt, 'Generate the next unique interview question now.');
-      const qData = this.aiService.parseJson(response);
+      const questions = await this.questionsService.getRandomQuestions({
+        stack: session.tech_stack,
+        difficulty: session.difficulty,
+        count: 20,
+        excludeIds: usedQuestionIds,
+      });
 
+      const availableQuestions = questions.filter(q => !pastQuestionTexts.includes(q.question));
+      
+      if (availableQuestions.length === 0) {
+        throw new HttpException('No more questions available for this session', 400);
+      }
+
+      const selectedQuestion = availableQuestions[0];
+      
       // Calculate the next order number more reliably
       const maxOrder = pastRounds.length > 0 ? Math.max(...pastRounds.map(r => r.order || 0)) : 0;
       const order = maxOrder + 1;
+      
       const round = {
         id: uuidv4(),
         session_id: sessionId,
         order,
-        question: qData.question || '',
-        question_type: qData.type || 'conceptual',
-        topic: qData.topic || 'general',
-        expected_key_points: qData.expected_key_points || [],
-        hint: qData.hint || '',
+        question_id: selectedQuestion.id,
+        question: selectedQuestion.question,
+        question_type: selectedQuestion.question_type || 'conceptual',
+        topic: selectedQuestion.topic || 'general',
+        expected_key_points: selectedQuestion.expected_key_points || [],
+        hint: selectedQuestion.hint || '',
         answer: null, score: null, feedback: null,
         strengths: [], weaknesses: [],
         follow_up_question: null, improvement_suggestions: [], verdict: null,
@@ -85,8 +100,42 @@ export class InterviewService {
       await this.sessionModel.updateOne({ id: sessionId }, { $set: { questions_asked: order } });
       return round;
     } catch (error) {
-      throw new HttpException(`AI generation failed: ${error.message}`, 500);
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(`Question retrieval failed: ${error.message}`, 500);
     }
+  }
+
+  async createRound(sessionId: string, questionId: string): Promise<any> {
+    const session = await this.sessionModel.findOne({ id: sessionId }).lean();
+    if (!session) throw new HttpException('Session not found', 404);
+    if (session.status !== 'active') throw new HttpException('Session is not active', 400);
+
+    const question = await this.questionsService.getQuestionById(questionId);
+    if (!question) throw new HttpException('Question not found', 404);
+
+    const pastRounds = await this.roundModel.find({ session_id: sessionId }, { order: 1 }).sort({ order: 1 }).lean();
+    const maxOrder = pastRounds.length > 0 ? Math.max(...pastRounds.map(r => r.order || 0)) : 0;
+    const order = maxOrder + 1;
+
+    const round = {
+      id: uuidv4(),
+      session_id: sessionId,
+      order,
+      question_id: question.id,
+      question: question.question,
+      question_type: question.question_type || 'conceptual',
+      topic: question.topic || 'general',
+      expected_key_points: question.expected_key_points || [],
+      hint: question.hint || '',
+      answer: null, score: null, feedback: null,
+      strengths: [], weaknesses: [],
+      follow_up_question: null, improvement_suggestions: [], verdict: null,
+      created_at: new Date().toISOString(),
+    };
+
+    await this.roundModel.create(round);
+    await this.sessionModel.updateOne({ id: sessionId }, { $set: { questions_asked: order } });
+    return round;
   }
 
   async evaluateAnswer(sessionId: string, roundId: string, answer: string): Promise<any> {

@@ -15,6 +15,9 @@ export class Round extends Document {
   @Prop({ required: true })
   order: number;
 
+  @Prop({ default: null })
+  question_id: string;
+
   @Prop({ default: '' })
   question: string;
 

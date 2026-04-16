@@ -22,6 +22,11 @@ class QuestionRequestDto {
   @IsString() session_id: string;
 }
 
+class CreateRoundDto {
+  @IsString() session_id: string;
+  @IsString() question_id: string;
+}
+
 class AnswerSubmitDto {
   @IsString() session_id: string;
   @IsString() round_id: string;
@@ -77,6 +82,11 @@ export class InterviewController {
   @Post('interview/question')
   generateQuestion(@Body() dto: QuestionRequestDto): Promise<any> {
     return this.interviewService.generateQuestion(dto.session_id);
+  }
+
+  @Post('interview/round')
+  createRound(@Body() dto: CreateRoundDto): Promise<any> {
+    return this.interviewService.createRound(dto.session_id, dto.question_id);
   }
 
   @Post('interview/evaluate')

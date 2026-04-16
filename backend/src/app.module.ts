@@ -7,6 +7,7 @@ import { DashboardModule } from './dashboard/dashboard.module';
 import { BookmarksModule } from './bookmarks/bookmarks.module';
 import { AiModule } from './ai/ai.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { QuestionsModule } from './questions/questions.module';
 import { AppController } from './app.controller';
 import { AuthService } from './auth/auth.service';
 
@@ -17,8 +18,10 @@ import { AuthService } from './auth/auth.service';
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
-        uri: config.get<string>('MONGO_URL'),
-        dbName: config.get<string>('DB_NAME'),
+        // Defaults make local dev + seeding deterministic even without a .env file.
+        uri: config.get<string>('MONGO_URL') || 'mongodb://127.0.0.1:27017',
+        // Keep default aligned with the commonly-used local DB name in this repo.
+        dbName: config.get<string>('DB_NAME') || 'devgrill',
       }),
     }),
     AuthModule,
@@ -27,6 +30,7 @@ import { AuthService } from './auth/auth.service';
     BookmarksModule,
     AiModule,
     NotificationsModule,
+    QuestionsModule,
   ],
   controllers: [AppController],
 })

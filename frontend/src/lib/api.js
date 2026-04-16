@@ -11,6 +11,8 @@ const api = axios.create({
 export const createSession = (data) => api.post("/sessions", data);
 export const listSessions = (status) => api.get("/sessions", { params: status ? { status } : {} });
 export const getSession = (id) => api.get(`/sessions/${id}`);
+export const getQuestions = (stack, limit) => api.get("/questions", { params: { stack, limit } });
+export const createRound = (sessionId, questionId) => api.post("/interview/round", { session_id: sessionId, question_id: questionId });
 export const generateQuestion = (sessionId) => api.post("/interview/question", { session_id: sessionId });
 export const evaluateAnswer = (sessionId, roundId, answer) =>
   api.post("/interview/evaluate", { session_id: sessionId, round_id: roundId, answer });

@@ -34,10 +34,14 @@ export function AuthProvider({ children }) {
   };
 
   const logout = async () => {
-    await axios.post(`${API}/api/auth/logout`, {}, { withCredentials: true });
-    setUser(null);
+    try {
+      await axios.post(`${API}/api/auth/logout`, {}, { withCredentials: true });
+    } catch (err) {
+      console.error("Logout failed on server", err);
+    } finally {
+      setUser(null);
+    }
   };
-
   return (
     <AuthContext.Provider value={{ user, loading, login, register, logout, checkAuth }}>
       {children}
