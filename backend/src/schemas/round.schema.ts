@@ -34,6 +34,15 @@ export class Round extends Document {
   answer: string;
 
   @Prop({ default: null })
+  answer_audio_url: string;
+
+  @Prop({ default: null })
+  answer_audio_mime_type: string;
+
+  @Prop({ default: null })
+  answer_audio_duration_ms: number;
+
+  @Prop({ default: null })
   score: number;
 
   @Prop({ default: null })

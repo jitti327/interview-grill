@@ -140,6 +140,22 @@ export default function ReportPage() {
                   </div>
                 </div>
                 <p className="text-xs text-zinc-400 print:text-gray-600 leading-relaxed">{round.question}</p>
+                {round.answer && (
+                  <div className="mt-2">
+                    <div className="text-[10px] tracking-[0.15em] text-zinc-500 mb-1">YOUR ANSWER</div>
+                    <p className="text-[11px] text-zinc-300 print:text-gray-700 leading-relaxed whitespace-pre-wrap">
+                      {round.answer}
+                    </p>
+                  </div>
+                )}
+                {round.answer_audio_url && (
+                  <div className="mt-3 print:hidden">
+                    <div className="text-[10px] tracking-[0.15em] text-zinc-500 mb-1">ANSWER AUDIO</div>
+                    <audio controls preload="none" className="w-full" src={round.answer_audio_url}>
+                      Your browser does not support audio playback.
+                    </audio>
+                  </div>
+                )}
                 {round.feedback && (
                   <p className="text-[11px] text-zinc-500 print:text-gray-500 mt-2 pl-3 border-l border-[#27272A] print:border-gray-300">
                     {round.feedback}

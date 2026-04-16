@@ -131,6 +131,39 @@ export class InterviewService {
     }
   }
 
+  async attachAnswerAudio(
+    sessionId: string,
+    roundId: string,
+    data: {
+      fileName: string;
+      mimeType: string;
+      size: number;
+      transcript?: string;
+      durationMs?: number | null;
+      host: string;
+      protocol: string;
+    },
+  ): Promise<any> {
+    const session = await this.sessionModel.findOne({ id: sessionId }).lean();
+    if (!session) throw new HttpException('Session not found', 404);
+    const round = await this.roundModel.findOne({ id: roundId, session_id: sessionId }).lean();
+    if (!round) throw new HttpException('Round not found', 404);
+
+    const baseUrl = `${data.protocol}://${data.host}`;
+    const audioUrl = `${baseUrl}/uploads/answers/${data.fileName}`;
+    const update: any = {
+      answer_audio_url: audioUrl,
+      answer_audio_mime_type: data.mimeType || 'audio/webm',
+      answer_audio_duration_ms: data.durationMs ?? null,
+    };
+    if (data.transcript && data.transcript.trim()) {
+      update.answer = data.transcript.trim();
+    }
+
+    await this.roundModel.updateOne({ id: roundId }, { $set: update });
+    return { ...round, ...update, _id: undefined, __v: undefined };
+  }
+
   async completeSession(sessionId: string, userId?: string): Promise<any> {
     const session = await this.sessionModel.findOne({ id: sessionId }).lean();
     if (!session) throw new HttpException('Session not found', 404);

@@ -14,6 +14,17 @@ export const getSession = (id) => api.get(`/sessions/${id}`);
 export const generateQuestion = (sessionId) => api.post("/interview/question", { session_id: sessionId });
 export const evaluateAnswer = (sessionId, roundId, answer) =>
   api.post("/interview/evaluate", { session_id: sessionId, round_id: roundId, answer });
+export const uploadAnswerAudio = (sessionId, roundId, audioBlob, transcript = "", durationMs = null) => {
+  const formData = new FormData();
+  formData.append("session_id", sessionId);
+  formData.append("round_id", roundId);
+  formData.append("transcript", transcript);
+  if (typeof durationMs === "number") formData.append("duration_ms", String(durationMs));
+  formData.append("audio", audioBlob, `answer-${roundId}.webm`);
+  return api.post("/interview/answer-audio", formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+};
 export const completeSession = (sessionId) => api.post(`/sessions/${sessionId}/complete`);
 export const getDashboardOverview = () => api.get("/dashboard/overview");
 export const getSkillRadar = () => api.get("/dashboard/skill-radar");
