@@ -54,7 +54,7 @@ export class InterviewService {
     if (!session) throw new HttpException('Session not found', 404);
     if (session.status !== 'active') throw new HttpException('Session is not active', 400);
 
-    const pastRounds = await this.roundModel.find({ session_id: sessionId }, { question: 1 }).lean();
+    const pastRounds = await this.roundModel.find({ session_id: sessionId }, { question: 1, order: 1 }).sort({ order: 1 }).lean();
     const pastQuestions = pastRounds.map((r) => r.question);
 
     const prompt = this.buildQuestionPrompt(session.tech_stack, session.category, session.difficulty, pastQuestions);
@@ -63,7 +63,9 @@ export class InterviewService {
       const response = await this.aiService.generate(prompt, 'Generate the next unique interview question now.');
       const qData = this.aiService.parseJson(response);
 
-      const order = pastRounds.length + 1;
+      // Calculate the next order number more reliably
+      const maxOrder = pastRounds.length > 0 ? Math.max(...pastRounds.map(r => r.order || 0)) : 0;
+      const order = maxOrder + 1;
       const round = {
         id: uuidv4(),
         session_id: sessionId,
