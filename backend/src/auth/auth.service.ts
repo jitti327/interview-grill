@@ -79,8 +79,8 @@ export class AuthService {
   }
 
   async seedAdmin() {
-    const email = (process.env.ADMIN_EMAIL || 'admin@devgrill.com').toLowerCase();
-    const password = process.env.ADMIN_PASSWORD || 'admin123';
+    const email = (process.env.ADMIN_EMAIL || 'test@devgrill.com').toLowerCase();
+    const password = process.env.ADMIN_PASSWORD || 'test';
     const existing = await this.userModel.findOne({ email });
     if (!existing) {
       await this.userModel.create({

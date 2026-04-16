@@ -20,7 +20,7 @@
   "passed_tests": [
     "API Root endpoint responds correctly",
     "User registration with email/password/name works",
-    "Admin login with admin@devgrill.com/admin123 successful",
+    "Admin login with test@devgrill.com/test successful",
     "GET /api/auth/me returns user data with cookies",
     "POST /api/auth/logout clears cookies properly",
     "Session creation with timed_mode and time_per_question fields",
