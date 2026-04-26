@@ -11,7 +11,7 @@ export class NotificationsController {
   ) {}
 
   private async getUserId(req: Request): Promise<string> {
-    const token = req.cookies?.access_token || req.headers.authorization?.replace('Bearer ', '');
+    const token = req.cookies?.access_token || req.headers.authorization?.replace(/^Bearer\s+/i, '');
     if (!token) throw new HttpException('Not authenticated', 401);
     const user = await this.authService.getUserFromToken(token);
     if (!user) throw new HttpException('Not authenticated', 401);
@@ -32,8 +32,9 @@ export class NotificationsController {
   }
 
   @Post(':id/read')
-  async markRead(@Param('id') id: string): Promise<any> {
-    return this.notifService.markRead(id);
+  async markRead(@Param('id') id: string, @Req() req: Request): Promise<any> {
+    const userId = await this.getUserId(req);
+    return this.notifService.markRead(id, userId);
   }
 
   @Post('mark-all-read')

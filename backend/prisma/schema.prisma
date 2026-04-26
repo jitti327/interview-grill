@@ -1,0 +1,138 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              String         @id @default(uuid())
+  email           String         @unique
+  password_hash   String
+  name            String         @default("")
+  role            String         @default("user")
+  is_subscriber   Boolean        @default(false)
+  is_email_verified Boolean      @default(false)
+  email_verification_token String? @unique
+  email_verification_expires_at DateTime?
+  created_at      DateTime       @default(now())
+  sessions        Session[]
+  bookmarks       Bookmark[]
+  notifications   Notification[]
+}
+
+model Session {
+  id                 String    @id @default(uuid())
+  user_id            String?
+  user               User?     @relation(fields: [user_id], references: [id], onDelete: SetNull)
+  session_secret     String?
+  tech_stack         String
+  category           String
+  difficulty         String
+  num_questions      Int       @default(8)
+  timed_mode         Boolean   @default(false)
+  time_per_question  Int       @default(300)
+  questions_asked    Int       @default(0)
+  status             String    @default("active")
+  avg_score          Float?
+  created_at         DateTime  @default(now())
+  completed_at       DateTime?
+  ip_hash            String?
+  client_fingerprint String?
+  rounds             Round[]
+
+  @@index([user_id])
+  @@index([status])
+  @@index([ip_hash])
+}
+
+model AnonIpUsage {
+  id               String   @id @default(uuid())
+  ip_hash          String   @unique
+  questions_used   Int      @default(0)
+  updated_at       DateTime @updatedAt
+}
+
+model Round {
+  id                       String   @id @default(uuid())
+  session_id               String
+  session                  Session  @relation(fields: [session_id], references: [id], onDelete: Cascade)
+  round_order              Int      @map("round_order")
+  question_id              String?
+  question                 String   @default("")
+  question_type            String   @default("conceptual")
+  topic                    String   @default("general")
+  expected_key_points      String[] @default([])
+  hint                     String   @default("")
+  coding_template          String?
+  coding_test_cases        Json?
+  answer                   String?
+  answer_audio_url         String?
+  answer_audio_mime_type   String?
+  answer_audio_duration_ms Int?
+  score                    Float?
+  feedback                 String?
+  strengths                String[] @default([])
+  weaknesses               String[] @default([])
+  follow_up_question       String?
+  improvement_suggestions  String[] @default([])
+  verdict                  String?
+  created_at               DateTime @default(now())
+
+  @@index([session_id])
+  @@unique([session_id, round_order])
+}
+
+model Question {
+  id                  String   @id
+  stack               String
+  tech_stack          String?
+  difficulty          String
+  question_type       String
+  category            String
+  topic               String
+  question            String
+  expected_key_points String[] @default([])
+  hint                String   @default("")
+  coding_template     String?
+  coding_test_cases   Json?
+  tags                String[] @default([])
+  sample_answer       String[] @default([])
+  is_active           Boolean  @default(true)
+  created_at          DateTime @default(now())
+  updated_at          DateTime @updatedAt
+
+  @@index([stack])
+  @@index([difficulty])
+  @@index([is_active])
+}
+
+model Bookmark {
+  id             String   @id @default(uuid())
+  user_id        String
+  user           User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  session_id     String
+  round_id       String
+  question       String   @default("")
+  topic          String   @default("")
+  question_type  String   @default("")
+  created_at     DateTime @default(now())
+
+  @@index([user_id])
+}
+
+model Notification {
+  id         String   @id @default(uuid())
+  user_id    String
+  user       User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  type       String
+  title      String
+  message    String
+  metadata   Json     @default("{}")
+  read       Boolean  @default(false)
+  created_at DateTime @default(now())
+
+  @@index([user_id])
+}

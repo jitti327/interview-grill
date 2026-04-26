@@ -5,15 +5,41 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 export class AiService {
   private genAI: GoogleGenerativeAI;
   private models = ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.0-flash'];
+  private readonly apiKey: string;
 
   constructor() {
-    this.genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+    this.apiKey = this.resolveApiKey();
+    this.genAI = new GoogleGenerativeAI(this.apiKey);
   }
 
-  async generate(systemPrompt: string, userText: string): Promise<string> {
+  private resolveApiKey(): string {
+    return (
+      process.env.GEMINI_API_KEY?.trim() ||
+      process.env.GOOGLE_API_KEY?.trim() ||
+      process.env.GOOGLE_GEMINI_API_KEY?.trim() ||
+      ''
+    );
+  }
+
+  isConfigured(): boolean {
+    return Boolean(this.apiKey);
+  }
+
+  async generate(
+    systemPrompt: string,
+    userText: string,
+    preferredModels?: string[],
+    options?: { maxRetriesPerModel?: number; retryBackoffMs?: number; failFastOnRateLimit?: boolean },
+  ): Promise<string> {
+    if (!this.apiKey) {
+      throw new Error('Gemini API key is not configured');
+    }
+    const modelOrder = preferredModels?.length ? preferredModels : this.models;
+    const maxRetriesPerModel = Math.max(1, options?.maxRetriesPerModel ?? 3);
+    const retryBackoffMs = Math.max(100, options?.retryBackoffMs ?? 1500);
     let lastError: Error;
-    for (const modelName of this.models) {
-      for (let attempt = 0; attempt < 3; attempt++) {
+    for (const modelName of modelOrder) {
+      for (let attempt = 0; attempt < maxRetriesPerModel; attempt++) {
         try {
           const model = this.genAI.getGenerativeModel({
             model: modelName,
@@ -21,10 +47,17 @@ export class AiService {
           });
           const result = await model.generateContent(userText);
           return result.response.text();
-        } catch (error) {
+        } catch (error: any) {
           lastError = error;
-          console.warn(`AI call failed (model=${modelName}, attempt=${attempt + 1}): ${error.message}`);
-          await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
+          const message = String(error?.message || '');
+          const isRateLimit = /\b429\b|quota|rate[-\s]?limit/i.test(message);
+          console.warn(`AI call failed (model=${modelName}, attempt=${attempt + 1}): ${message}`);
+          if (isRateLimit && options?.failFastOnRateLimit) {
+            break;
+          }
+          if (attempt < maxRetriesPerModel - 1) {
+            await new Promise((r) => setTimeout(r, retryBackoffMs * (attempt + 1)));
+          }
         }
       }
       console.log(`Model ${modelName} exhausted retries, trying next...`);

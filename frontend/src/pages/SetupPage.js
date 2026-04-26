@@ -1,8 +1,11 @@
-import { useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+"use client";
+
+import { useRouter } from "next/router";
+import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
-import { createSession } from "@/lib/api";
+import { createSession, storeInterviewSessionSecret } from "@/lib/api";
+import { useAuth } from "@/contexts/AuthContext";
 import { ArrowRight, Loader2, Clock, Timer } from "lucide-react";
 
 const CATEGORIES = {
@@ -19,20 +22,37 @@ const DIFFICULTIES = [
   { id: "advanced", label: "Advanced", tag: "SENIOR", desc: "Deep-dive architecture & edge cases. Aggressive questioning." },
 ];
 
-const QUESTION_COUNTS = [5, 8, 10, 15];
-
 export default function SetupPage() {
-  const [searchParams] = useSearchParams();
-  const preCategory = searchParams.get("category") || "";
-  const navigate = useNavigate();
+  const router = useRouter();
+  const { user, loading: authLoading } = useAuth();
+  const preCategory = typeof router.query?.category === "string" ? router.query.category : "";
+
+  const questionCountOptions = useMemo(() => {
+    if (!user) return [1, 2, 3];
+    if (user.role === "admin") return [5, 10, 20, 30, 50, 100];
+    if (user.is_subscriber) return [5, 8, 10, 15];
+    return [1, 2, 3, 4, 5];
+  }, [user]);
 
   const [category, setCategory] = useState(preCategory);
   const [techStack, setTechStack] = useState("");
   const [difficulty, setDifficulty] = useState("");
-  const [numQuestions, setNumQuestions] = useState(8);
+  const [numQuestions, setNumQuestions] = useState(3);
   const [timedMode, setTimedMode] = useState(false);
   const [timePerQuestion, setTimePerQuestion] = useState(300);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (preCategory) {
+      setCategory(preCategory);
+    }
+  }, [preCategory]);
+
+  useEffect(() => {
+    if (authLoading) return;
+    const max = questionCountOptions[questionCountOptions.length - 1];
+    setNumQuestions((n) => (n > max ? max : n));
+  }, [authLoading, questionCountOptions]);
 
   const currentStacks = category ? CATEGORIES[category]?.stacks || [] : [];
 
@@ -51,10 +71,15 @@ export default function SetupPage() {
         timed_mode: timedMode,
         time_per_question: timePerQuestion,
       });
+      if (res.data.session_secret) {
+        storeInterviewSessionSecret(res.data.id, res.data.session_secret);
+      }
       toast.success("Interview session created!");
-      navigate(`/interview/${res.data.id}`);
+      router.push(`/interview/${res.data.id}`);
     } catch (err) {
-      toast.error("Failed to create session");
+      const raw = err?.response?.data?.message;
+      const msg = Array.isArray(raw) ? raw.join(" ") : raw || err?.message || "Failed to create session";
+      toast.error(msg);
       console.error(err);
     } finally {
       setLoading(false);
@@ -176,8 +201,17 @@ export default function SetupPage() {
           <label className="text-xs tracking-[0.2em] uppercase font-bold text-zinc-400 block mb-3">
             NUMBER OF QUESTIONS
           </label>
-          <div className="flex gap-2">
-            {QUESTION_COUNTS.map((n) => (
+          <p className="text-[11px] text-zinc-500 mb-3">
+            {!user
+              ? "Without an account, you can run up to 3 questions per network (tracked by IP to limit extra guest windows)."
+              : user.role === "admin"
+                ? "Admin account: unlimited interview access. You can run long sessions for testing."
+              : user.is_subscriber
+                ? "Subscriber: longer interviews (up to 15 questions per session)."
+                : "Free account: up to 5 questions per session. Upgrade for longer runs."}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {questionCountOptions.map((n) => (
               <button
                 key={n}
                 data-testid={`setup-questions-${n}`}

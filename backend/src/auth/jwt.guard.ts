@@ -7,7 +7,8 @@ export class OptionalAuthGuard implements CanActivate {
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const req = context.switchToHttp().getRequest();
-    const token = req.cookies?.access_token || req.headers.authorization?.replace('Bearer ', '');
+    const token =
+      req.cookies?.access_token || req.headers.authorization?.replace(/^Bearer\s+/i, '');
     if (token) {
       req.user = await this.authService.getUserFromToken(token);
     }

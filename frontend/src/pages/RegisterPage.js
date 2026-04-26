@@ -1,5 +1,8 @@
+"use client";
+
+import Link from "next/link";
+import { useRouter } from "next/router";
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
 import { Loader2, Zap } from "lucide-react";
@@ -13,23 +16,40 @@ function formatError(detail) {
 
 export default function RegisterPage() {
   const { register } = useAuth();
-  const navigate = useNavigate();
+  const router = useRouter();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
+
+  const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+  const nameValid = name.trim().length >= 2;
+  const strongPassword =
+    password.length >= 8 &&
+    /[A-Z]/.test(password) &&
+    /[a-z]/.test(password) &&
+    /\d/.test(password) &&
+    /[^A-Za-z\d]/.test(password);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
-    if (password.length < 6) { setError("Password must be at least 6 characters"); return; }
+    setSuccess("");
+    if (!nameValid) { setError("Name must be at least 2 characters"); return; }
+    if (!emailValid) { setError("Please enter a valid email address"); return; }
+    if (!strongPassword) {
+      setError("Password must be 8+ chars with uppercase, lowercase, number, and special character");
+      return;
+    }
     setLoading(true);
     try {
-      await register(email, password, name);
-      navigate("/dashboard");
+      const result = await register(email, password, name);
+      setSuccess(result?.message || "Registration successful. Please verify your email.");
+      setTimeout(() => router.push("/login"), 1800);
     } catch (err) {
-      setError(formatError(err.response?.data?.detail) || err.message);
+      setError(formatError(err.response?.data?.detail || err.response?.data?.message) || err.message);
     } finally {
       setLoading(false);
     }
@@ -49,6 +69,11 @@ export default function RegisterPage() {
 
           {error && (
             <div data-testid="register-error" className="mb-4 p-3 bg-red-400/10 border border-red-400/30 text-xs text-red-400">{error}</div>
+          )}
+          {success && (
+            <div className="mb-4 p-3 bg-emerald-400/10 border border-emerald-400/30 text-xs text-emerald-400">
+              {success}
+            </div>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -78,6 +103,9 @@ export default function RegisterPage() {
                 className="w-full bg-[#0A0A0A] border border-[#27272A] text-sm text-white p-2.5 focus:outline-none focus:border-yellow-500 placeholder-zinc-600"
                 placeholder="Min 6 characters"
               />
+              <p className="text-[10px] text-zinc-600 mt-1">
+                Use 8+ chars with uppercase, lowercase, number, and special character.
+              </p>
             </div>
             <button
               data-testid="register-submit-btn"
@@ -90,7 +118,7 @@ export default function RegisterPage() {
 
           <p className="text-xs text-zinc-500 mt-4 text-center">
             Already have an account?{" "}
-            <Link to="/login" data-testid="goto-login-link" className="text-yellow-500 hover:underline">Sign in</Link>
+            <Link href="/login" data-testid="goto-login-link" className="text-yellow-500 hover:underline">Sign in</Link>
           </p>
         </div>
       </motion.div>

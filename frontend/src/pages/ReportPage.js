@@ -1,5 +1,7 @@
+"use client";
+
 import { useState, useEffect } from "react";
-import { useParams } from "react-router-dom";
+import { useRouter } from "next/router";
 import { motion } from "framer-motion";
 import { getSession } from "@/lib/api";
 import { Share2, Printer, CheckCircle, XCircle, Zap } from "lucide-react";
@@ -9,18 +11,39 @@ const CATEGORY_LABELS = {
   system_design: "System Design", dsa: "DSA",
 };
 
-export default function ReportPage() {
-  const { sessionId } = useParams();
+function EvaluationSourcePill({ feedback }) {
+  const text = String(feedback || "");
+  const isDbFallback =
+    text.includes("DB-backed fallback evaluator") || text.includes("[evaluation_source: database_fallback]");
+  if (isDbFallback) {
+    return (
+      <span className="text-[10px] px-1.5 py-0.5 border text-blue-300 bg-blue-500/10 border-blue-500/30">
+        DB FALLBACK
+      </span>
+    );
+  }
+  return (
+    <span className="text-[10px] px-1.5 py-0.5 border text-yellow-300 bg-yellow-500/10 border-yellow-500/30">
+      AI
+    </span>
+  );
+}
+
+export default function ReportPage({ sessionId }) {
+  const router = useRouter();
+  const resolvedSessionId =
+    sessionId || (typeof router.query?.sessionId === "string" ? router.query.sessionId : "");
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    getSession(sessionId)
+    if (!resolvedSessionId) return;
+    getSession(resolvedSessionId)
       .then((r) => setData(r.data))
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [sessionId]);
+  }, [resolvedSessionId]);
 
   const handleShare = () => {
     navigator.clipboard.writeText(window.location.href);
@@ -40,6 +63,7 @@ export default function ReportPage() {
 
   const { session, rounds } = data;
   const scored = rounds.filter((r) => r.score !== null);
+  const visibleRounds = rounds.filter((r) => r.score !== null || (r.feedback && String(r.feedback).trim()));
   const avgScore = scored.length ? (scored.reduce((a, r) => a + r.score, 0) / scored.length).toFixed(1) : 0;
   const strongCount = scored.filter((r) => r.verdict === "strong").length;
   const weakCount = scored.filter((r) => r.verdict === "poor" || r.verdict === "needs_improvement").length;
@@ -123,20 +147,27 @@ export default function ReportPage() {
           {/* Questions Breakdown */}
           <div className="space-y-3">
             <h3 className="text-xs tracking-[0.2em] uppercase font-bold text-zinc-400 mb-2">QUESTION BREAKDOWN</h3>
-            {scored.map((round, idx) => (
+            {visibleRounds.map((round, idx) => (
               <div key={round.id} className="bg-[#121212] border border-[#27272A] p-4 print:bg-white print:border-gray-200">
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-bold text-white print:text-black">Q{idx + 1}</span>
                     <span className="text-[10px] px-1.5 py-0.5 bg-[#0A0A0A] border border-[#27272A] text-zinc-500 print:bg-gray-100">{round.topic}</span>
                     <span className="text-[10px] text-zinc-600 uppercase">{round.question_type}</span>
+                    <EvaluationSourcePill feedback={round.feedback} />
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className={`text-sm font-bold ${
-                      (round.score || 0) >= 7 ? "text-green-400" : (round.score || 0) >= 5 ? "text-yellow-500" : "text-red-400"
-                    }`}>{round.score}/10</span>
-                    {round.verdict === "strong" && <CheckCircle className="w-3.5 h-3.5 text-green-400" />}
-                    {(round.verdict === "poor" || round.verdict === "needs_improvement") && <XCircle className="w-3.5 h-3.5 text-red-400" />}
+                    {round.score !== null ? (
+                      <>
+                        <span className={`text-sm font-bold ${
+                          (round.score || 0) >= 7 ? "text-green-400" : (round.score || 0) >= 5 ? "text-yellow-500" : "text-red-400"
+                        }`}>{round.score}/10</span>
+                        {round.verdict === "strong" && <CheckCircle className="w-3.5 h-3.5 text-green-400" />}
+                        {(round.verdict === "poor" || round.verdict === "needs_improvement") && <XCircle className="w-3.5 h-3.5 text-red-400" />}
+                      </>
+                    ) : (
+                      <span className="text-[11px] text-zinc-500">Feedback only</span>
+                    )}
                   </div>
                 </div>
                 <p className="text-xs text-zinc-400 print:text-gray-600 leading-relaxed">{round.question}</p>

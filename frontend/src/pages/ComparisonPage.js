@@ -1,8 +1,11 @@
+"use client";
+
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useRouter } from "next/router";
 import { motion } from "framer-motion";
 import { getComparisonData } from "@/lib/api";
 import { listSessions } from "@/lib/api";
+import { useAuth } from "@/contexts/AuthContext";
 import { ArrowLeftRight, Trophy, TrendingUp, Target } from "lucide-react";
 
 const CATEGORY_LABELS = {
@@ -26,7 +29,8 @@ function ScoreBar({ score, label }) {
 }
 
 export default function ComparisonPage() {
-  const navigate = useNavigate();
+  const router = useRouter();
+  const { user, loading: authLoading } = useAuth();
   const [sessions, setSessions] = useState([]);
   const [session1, setSession1] = useState("");
   const [session2, setSession2] = useState("");
@@ -34,8 +38,15 @@ export default function ComparisonPage() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
+    if (!authLoading && !user) {
+      router.replace("/login");
+    }
+  }, [authLoading, user, router]);
+
+  useEffect(() => {
+    if (!user) return;
     listSessions("completed").then((r) => setSessions(r.data)).catch(console.error);
-  }, []);
+  }, [user]);
 
   const handleCompare = async () => {
     if (!session1 || !session2) return;
@@ -49,6 +60,14 @@ export default function ComparisonPage() {
       setLoading(false);
     }
   };
+
+  if (authLoading || !user) {
+    return (
+      <div className="min-h-screen bg-[#0A0A0A] flex items-center justify-center">
+        <div className="w-5 h-5 border-2 border-yellow-500 border-t-transparent animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#0A0A0A]" data-testid="comparison-page">
@@ -172,7 +191,7 @@ export default function ComparisonPage() {
             <Target className="w-12 h-12 text-zinc-700 mx-auto mb-4" />
             <p className="text-sm text-zinc-500 mb-4">Complete at least 2 sessions to compare</p>
             <button
-              onClick={() => navigate("/setup")}
+              onClick={() => router.push("/setup")}
               className="bg-yellow-500 text-black font-bold text-xs px-4 py-2 hover:bg-yellow-400 transition-colors"
             >
               START INTERVIEW

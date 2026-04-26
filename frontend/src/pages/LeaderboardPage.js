@@ -1,5 +1,7 @@
+"use client";
+
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useRouter } from "next/router";
 import { motion } from "framer-motion";
 import api from "@/lib/api";
 import { Trophy, Medal, Star, ArrowRight, Users } from "lucide-react";
@@ -12,7 +14,7 @@ function RankBadge({ rank }) {
 }
 
 export default function LeaderboardPage() {
-  const navigate = useNavigate();
+  const router = useRouter();
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -34,7 +36,7 @@ export default function LeaderboardPage() {
           <div className="text-center py-20">
             <Users className="w-12 h-12 text-zinc-700 mx-auto mb-4" />
             <p className="text-sm text-zinc-500 mb-4">No ranked users yet. Complete interviews while logged in to appear here.</p>
-            <button data-testid="leaderboard-start-btn" onClick={() => navigate("/setup")} className="bg-yellow-500 text-black font-bold text-xs px-6 py-2 hover:bg-yellow-400 transition-colors inline-flex items-center gap-1">
+            <button data-testid="leaderboard-start-btn" onClick={() => router.push("/setup")} className="bg-yellow-500 text-black font-bold text-xs px-6 py-2 hover:bg-yellow-400 transition-colors inline-flex items-center gap-1">
               START INTERVIEW <ArrowRight className="w-3 h-3" />
             </button>
           </div>

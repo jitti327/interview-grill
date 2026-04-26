@@ -1,7 +1,10 @@
+"use client";
+
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useRouter } from "next/router";
 import { motion } from "framer-motion";
 import { listSessions } from "@/lib/api";
+import { useAuth } from "@/contexts/AuthContext";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Clock, ArrowRight, CheckCircle, Play } from "lucide-react";
 
@@ -73,12 +76,20 @@ function SessionRow({ session, onClick }) {
 }
 
 export default function HistoryPage() {
-  const navigate = useNavigate();
+  const router = useRouter();
+  const { user, loading: authLoading } = useAuth();
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("all");
 
   useEffect(() => {
+    if (!authLoading && !user) {
+      router.replace("/login");
+    }
+  }, [authLoading, user, router]);
+
+  useEffect(() => {
+    if (!user) return;
     const load = async () => {
       try {
         const res = await listSessions();
@@ -90,11 +101,19 @@ export default function HistoryPage() {
       }
     };
     load();
-  }, []);
+  }, [user]);
 
   const filtered = activeTab === "all"
     ? sessions
     : sessions.filter((s) => s.status === activeTab);
+
+  if (authLoading || !user) {
+    return (
+      <div className="min-h-screen bg-[#0A0A0A] flex items-center justify-center">
+        <div className="w-5 h-5 border-2 border-yellow-500 border-t-transparent animate-spin" />
+      </div>
+    );
+  }
 
   if (loading) {
     return (
@@ -153,7 +172,7 @@ export default function HistoryPage() {
             </p>
             <button
               data-testid="history-start-btn"
-              onClick={() => navigate("/setup")}
+              onClick={() => router.push("/setup")}
               className="bg-yellow-500 text-black font-bold text-xs px-6 py-2 hover:bg-yellow-400 transition-colors inline-flex items-center gap-1"
             >
               START INTERVIEW <ArrowRight className="w-3 h-3" />
@@ -165,7 +184,7 @@ export default function HistoryPage() {
               <SessionRow
                 key={session.id}
                 session={session}
-                onClick={() => navigate(`/interview/${session.id}`)}
+                onClick={() => router.push(`/interview/${session.id}`)}
               />
             ))}
           </div>

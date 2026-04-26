@@ -1,16 +1,19 @@
-import { Link, useLocation } from "react-router-dom";
+"use client";
+
+import Link from "next/link";
+import { useRouter } from "next/router";
 import { motion } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
-import { Terminal, BarChart3, Clock, Zap, ArrowLeftRight, User, LogOut, Trophy, BookOpen } from "lucide-react";
+import { Terminal, BarChart3, Clock, Zap, ArrowLeftRight, User, LogOut, Trophy, BookOpen, Wrench } from "lucide-react";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
 import NotificationBell from "@/components/NotificationBell";
 
 export default function Navbar() {
-  const location = useLocation();
+  const router = useRouter();
   const { user, logout } = useAuth();
-  const isActive = (path) => location.pathname === path;
+  const isActive = (path) => router.pathname === path;
 
   const links = [
     { path: "/", label: "HOME", icon: Terminal },
@@ -20,6 +23,9 @@ export default function Navbar() {
     { path: "/study-plan", label: "COACH", icon: BookOpen },
     { path: "/compare", label: "COMPARE", icon: ArrowLeftRight },
   ];
+  if (user?.role === "admin") {
+    links.push({ path: "/admin/questions", label: "ADMIN", icon: Wrench });
+  }
 
   return (
     <nav
@@ -27,7 +33,7 @@ export default function Navbar() {
       className="sticky top-0 z-50 bg-[#0A0A0A] border-b border-[#27272A] px-6 md:px-8 lg:px-12"
     >
       <div className="max-w-7xl mx-auto flex items-center justify-between h-14">
-        <Link to="/" data-testid="nav-logo" className="flex items-center gap-2">
+        <Link href="/" data-testid="nav-logo" className="flex items-center gap-2">
           <Zap className="w-5 h-5 text-yellow-500" />
           <span className="font-heading text-lg font-bold tracking-tight text-white">
             DEV<span className="text-yellow-500">GRILL</span>
@@ -38,7 +44,7 @@ export default function Navbar() {
           {links.map(({ path, label, icon: Icon }) => (
             <Link
               key={path}
-              to={path}
+              href={path}
               data-testid={`nav-link-${label.toLowerCase()}`}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs tracking-[0.15em] font-bold transition-colors ${
                 isActive(path)
@@ -74,13 +80,13 @@ export default function Navbar() {
               </DropdownMenuContent>
             </DropdownMenu>
           ) : (
-            <Link to="/login" data-testid="nav-login-btn">
+            <Link href="/login" data-testid="nav-login-btn">
               <button className="border border-zinc-700 text-white font-bold text-xs tracking-[0.1em] px-3 py-1.5 hover:bg-zinc-800 transition-colors">
                 SIGN IN
               </button>
             </Link>
           )}
-          <Link to="/setup" data-testid="nav-start-interview-btn">
+          <Link href="/setup" data-testid="nav-start-interview-btn">
             <motion.button
               whileHover={{ y: -1 }}
               whileTap={{ scale: 0.98 }}

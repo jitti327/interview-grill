@@ -1,11 +1,32 @@
-import { Controller, Get, Post, Put, Delete, Query, Body, Param, HttpCode, HttpStatus, HttpException } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Put,
+  Delete,
+  Query,
+  Body,
+  Param,
+  HttpCode,
+  HttpStatus,
+  HttpException,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { QuestionsService } from './questions.service';
 import { ApiTags, ApiOperation, ApiResponse, ApiQuery } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @ApiTags('questions')
 @Controller('questions')
 export class QuestionsController {
   constructor(private readonly questionsService: QuestionsService) {}
+
+  private assertAdmin(req: any) {
+    if (!req?.user || req.user.role !== 'admin') {
+      throw new HttpException('Admin access required', HttpStatus.FORBIDDEN);
+    }
+  }
 
   @Post()
   @ApiOperation({ summary: 'Create a new question' })
@@ -60,6 +81,17 @@ export class QuestionsController {
   @ApiOperation({ summary: 'Update question' })
   async updateQuestion(@Param('id') id: string, @Body() updateData: any) {
     return this.questionsService.updateQuestion(id, updateData);
+  }
+
+  @Put(':id/coding-assets')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Update coding template and test cases for a question (admin only)' })
+  async updateCodingAssets(@Param('id') id: string, @Body() body: any, @Req() req: any) {
+    this.assertAdmin(req);
+    return this.questionsService.updateCodingAssets(id, {
+      coding_template: body?.coding_template ?? null,
+      coding_test_cases: body?.coding_test_cases ?? null,
+    });
   }
 
   @Delete(':id')

@@ -1,7 +1,11 @@
+"use client";
+
+import Link from "next/link";
+import { useRouter } from "next/router";
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
+import { resendVerificationEmail } from "@/lib/api";
 import { Loader2, Zap } from "lucide-react";
 
 function formatError(detail) {
@@ -13,23 +17,53 @@ function formatError(detail) {
 
 export default function LoginPage() {
   const { login } = useAuth();
-  const navigate = useNavigate();
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [info, setInfo] = useState("");
   const [loading, setLoading] = useState(false);
+  const [resending, setResending] = useState(false);
+  const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+  const passwordValid = password.length >= 8;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
+    setInfo("");
+    if (!emailValid) {
+      setError("Please enter a valid email address");
+      return;
+    }
+    if (!passwordValid) {
+      setError("Password must be at least 8 characters");
+      return;
+    }
     setLoading(true);
     try {
       await login(email, password);
-      navigate("/dashboard");
+      router.push("/dashboard");
     } catch (err) {
-      setError(formatError(err.response?.data?.detail) || err.message);
+      setError(formatError(err.response?.data?.detail || err.response?.data?.message) || err.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleResendVerification = async () => {
+    if (!emailValid) {
+      setError("Enter a valid email first, then resend verification.");
+      return;
+    }
+    setResending(true);
+    setError("");
+    try {
+      const res = await resendVerificationEmail(email.trim());
+      setInfo(res?.data?.message || "Verification email sent.");
+    } catch (err) {
+      setError(formatError(err.response?.data?.detail || err.response?.data?.message) || err.message);
+    } finally {
+      setResending(false);
     }
   };
 
@@ -54,6 +88,11 @@ export default function LoginPage() {
           {error && (
             <div data-testid="login-error" className="mb-4 p-3 bg-red-400/10 border border-red-400/30 text-xs text-red-400">
               {error}
+            </div>
+          )}
+          {info && (
+            <div className="mb-4 p-3 bg-emerald-400/10 border border-emerald-400/30 text-xs text-emerald-400">
+              {info}
             </div>
           )}
 
@@ -90,11 +129,19 @@ export default function LoginPage() {
             >
               {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "SIGN IN"}
             </button>
+            <button
+              type="button"
+              onClick={handleResendVerification}
+              disabled={resending}
+              className="w-full border border-[#27272A] text-zinc-300 font-bold text-xs tracking-[0.1em] py-2.5 hover:border-yellow-500 hover:text-yellow-500 transition-colors disabled:opacity-50"
+            >
+              {resending ? "SENDING..." : "RESEND VERIFICATION EMAIL"}
+            </button>
           </form>
 
           <p className="text-xs text-zinc-500 mt-4 text-center">
             No account?{" "}
-            <Link to="/register" data-testid="goto-register-link" className="text-yellow-500 hover:underline">
+            <Link href="/register" data-testid="goto-register-link" className="text-yellow-500 hover:underline">
               Register
             </Link>
           </p>

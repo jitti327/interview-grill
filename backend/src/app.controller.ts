@@ -1,10 +1,9 @@
-import { Controller, Get } from '@nestjs/common';
-import { InjectConnection } from '@nestjs/mongoose';
-import { Connection } from 'mongoose';
+import { Controller, Get, NotFoundException } from '@nestjs/common';
+import { PrismaService } from './prisma/prisma.service';
 
 @Controller()
 export class AppController {
-  constructor(@InjectConnection() private readonly connection: Connection) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   @Get()
   root() {
@@ -12,13 +11,10 @@ export class AppController {
   }
 
   @Get('_debug/db')
-  debugDb() {
-    const c: any = this.connection;
-    return {
-      readyState: c?.readyState,
-      dbName: c?.name,
-      host: c?.host,
-      port: c?.port,
-    };
+  async debugDb() {
+    if (process.env.ENABLE_DB_DEBUG !== 'true') {
+      throw new NotFoundException();
+    }
+    return { ok: true, message: 'Database reachable' };
   }
 }

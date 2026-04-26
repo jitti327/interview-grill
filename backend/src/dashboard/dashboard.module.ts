@@ -1,19 +1,11 @@
 import { Module } from '@nestjs/common';
-import { MongooseModule } from '@nestjs/mongoose';
 import { DashboardController } from './dashboard.controller';
 import { DashboardService } from './dashboard.service';
-import { Session, SessionSchema } from '../schemas/session.schema';
-import { Round, RoundSchema } from '../schemas/round.schema';
-import { User, UserSchema } from '../schemas/user.schema';
+import { AiModule } from '../ai/ai.module';
+import { AuthModule } from '../auth/auth.module';
 
 @Module({
-  imports: [
-    MongooseModule.forFeature([
-      { name: Session.name, schema: SessionSchema },
-      { name: Round.name, schema: RoundSchema },
-      { name: User.name, schema: UserSchema },
-    ]),
-  ],
+  imports: [AiModule, AuthModule],
   controllers: [DashboardController],
   providers: [DashboardService],
 })

@@ -1,4 +1,6 @@
-import { useNavigate } from "react-router-dom";
+"use client";
+
+import { useRouter } from "next/router";
 import { motion } from "framer-motion";
 import {
   Code2, Server, Layers, Box, Binary,
@@ -54,7 +56,7 @@ const fadeUp = {
 };
 
 export default function LandingPage() {
-  const navigate = useNavigate();
+  const router = useRouter();
 
   return (
     <div className="min-h-screen bg-[#0A0A0A]">
@@ -95,7 +97,7 @@ export default function LandingPage() {
                 data-testid="hero-start-btn"
                 whileHover={{ y: -1 }}
                 whileTap={{ scale: 0.98 }}
-                onClick={() => navigate("/setup")}
+                onClick={() => router.push("/setup")}
                 className="bg-yellow-500 text-black font-bold text-sm tracking-wide px-6 py-3 flex items-center gap-2 hover:bg-yellow-400 transition-colors"
               >
                 START INTERVIEW <ArrowRight className="w-4 h-4" />
@@ -103,7 +105,7 @@ export default function LandingPage() {
               <motion.button
                 data-testid="hero-dashboard-btn"
                 whileHover={{ y: -1 }}
-                onClick={() => navigate("/dashboard")}
+                onClick={() => router.push("/dashboard")}
                 className="border border-zinc-700 text-white font-bold text-sm px-6 py-3 hover:bg-zinc-800 transition-colors"
               >
                 VIEW DASHBOARD
@@ -165,7 +167,7 @@ export default function LandingPage() {
                 key={cat.id}
                 variants={fadeUp}
                 data-testid={`category-card-${cat.id}`}
-                onClick={() => navigate(`/setup?category=${cat.id}`)}
+                onClick={() => router.push(`/setup?category=${cat.id}`)}
                 className="tech-card bg-[#121212] border border-[#27272A] p-5 cursor-pointer group"
               >
                 <Icon className="w-6 h-6 text-yellow-500 mb-3" />

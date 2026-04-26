@@ -1,6 +1,5 @@
 import { Module, OnModuleInit } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { MongooseModule } from '@nestjs/mongoose';
 import { AuthModule } from './auth/auth.module';
 import { InterviewModule } from './interview/interview.module';
 import { DashboardModule } from './dashboard/dashboard.module';
@@ -10,20 +9,34 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { QuestionsModule } from './questions/questions.module';
 import { AppController } from './app.controller';
 import { AuthService } from './auth/auth.service';
+import { PrismaModule } from './prisma/prisma.module';
+
+function validateEnv(env: Record<string, string | undefined>) {
+  const required: string[] = ['DATABASE_URL'];
+  if (env.NODE_ENV === 'production') {
+    required.push('JWT_SECRET', 'FRONTEND_URL');
+  }
+  const missing = required.filter((key) => !env[key] || !String(env[key]).trim());
+  if (missing.length) {
+    throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
+  }
+  if (
+    env.NODE_ENV === 'production' &&
+    (!env.JWT_SECRET || env.JWT_SECRET === 'dev-insecure-change-me' || env.JWT_SECRET.length < 24)
+  ) {
+    throw new Error('JWT_SECRET must be set to a strong value in production');
+  }
+  return env;
+}
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true, envFilePath: '.env' }),
-    MongooseModule.forRootAsync({
-      imports: [ConfigModule],
-      inject: [ConfigService],
-      useFactory: (config: ConfigService) => ({
-        // Defaults make local dev + seeding deterministic even without a .env file.
-        uri: config.get<string>('MONGO_URL') || 'mongodb://127.0.0.1:27017',
-        // Keep default aligned with the commonly-used local DB name in this repo.
-        dbName: config.get<string>('DB_NAME') || 'devgrill',
-      }),
+    ConfigModule.forRoot({
+      isGlobal: true,
+      envFilePath: '.env',
+      validate: validateEnv,
     }),
+    PrismaModule,
     AuthModule,
     InterviewModule,
     DashboardModule,
@@ -39,6 +52,5 @@ export class AppModule implements OnModuleInit {
 
   async onModuleInit() {
     await this.authService.seedAdmin();
-    console.log('Admin seeded successfully');
   }
 }

@@ -1,43 +1,40 @@
 import { Injectable, HttpException } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
-import { v4 as uuidv4 } from 'uuid';
-import { Bookmark } from '../schemas/bookmark.schema';
-import { Round } from '../schemas/round.schema';
+import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class BookmarksService {
-  constructor(
-    @InjectModel(Bookmark.name) private bookmarkModel: Model<Bookmark>,
-    @InjectModel(Round.name) private roundModel: Model<Round>,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
-  async create(sessionId: string, roundId: string, userId?: string) {
-    const round = await this.roundModel.findOne({ id: roundId }).lean();
+  async create(sessionId: string, roundId: string, userId: string) {
+    const round = await this.prisma.round.findFirst({ where: { id: roundId } });
     if (!round) throw new HttpException('Round not found', 404);
 
-    const bookmark = {
-      id: uuidv4(),
-      user_id: userId || null,
-      session_id: sessionId,
-      round_id: roundId,
-      question: round.question || '',
-      topic: round.topic || '',
-      question_type: round.question_type || '',
-      created_at: new Date().toISOString(),
-    };
-    await this.bookmarkModel.create(bookmark);
+    const bookmark = await this.prisma.bookmark.create({
+      data: {
+        user_id: userId,
+        session_id: sessionId,
+        round_id: roundId,
+        question: round.question || '',
+        topic: round.topic || '',
+        question_type: round.question_type || '',
+      },
+    });
     return bookmark;
   }
 
-  async list(userId?: string) {
-    const query: any = userId ? { user_id: userId } : {};
-    return this.bookmarkModel.find(query, { _id: 0, __v: 0 }).sort({ created_at: -1 }).limit(100).lean();
+  async list(userId: string) {
+    return this.prisma.bookmark.findMany({
+      where: { user_id: userId },
+      orderBy: { created_at: 'desc' },
+      take: 100,
+    });
   }
 
-  async remove(bookmarkId: string) {
-    const result = await this.bookmarkModel.deleteOne({ id: bookmarkId });
-    if (result.deletedCount === 0) throw new HttpException('Bookmark not found', 404);
+  async remove(bookmarkId: string, userId: string) {
+    const result = await this.prisma.bookmark.deleteMany({
+      where: { id: bookmarkId, user_id: userId },
+    });
+    if (result.count === 0) throw new HttpException('Bookmark not found', 404);
     return { message: 'Bookmark deleted' };
   }
 }

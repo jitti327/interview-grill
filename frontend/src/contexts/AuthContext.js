@@ -1,8 +1,11 @@
+"use client";
+
 import { createContext, useContext, useState, useEffect, useCallback } from "react";
 import axios from "axios";
+import { resolveBackendBase } from "@/lib/backendBase";
 
 const AuthContext = createContext(null);
-const API = process.env.REACT_APP_BACKEND_URL;
+const API = resolveBackendBase();
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
@@ -29,7 +32,6 @@ export function AuthProvider({ children }) {
 
   const register = async (email, password, name) => {
     const res = await axios.post(`${API}/api/auth/register`, { email, password, name }, { withCredentials: true });
-    setUser(res.data);
     return res.data;
   };
 

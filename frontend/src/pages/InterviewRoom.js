@@ -1,8 +1,23 @@
+"use client";
+
+import { useRouter } from "next/router";
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useParams, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
-import { getSession, generateQuestion, evaluateAnswer, completeSession, createBookmark, uploadAnswerAudio, getQuestions, createRound } from "@/lib/api";
+import {
+  getSession,
+  completeSession,
+  createBookmark,
+  uploadAnswerAudio,
+  deleteAnswerAudio,
+  getQuestions,
+  createRound,
+  generateQuestion,
+  submitAnswer,
+  updateSubmittedAnswer,
+  runCode,
+} from "@/lib/api";
+import { useAuth } from "@/contexts/AuthContext";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -12,7 +27,7 @@ import {
   Loader2, Send, SkipForward, Square, Lightbulb,
   CheckCircle, XCircle, AlertTriangle, ArrowRight, BarChart3,
   Bookmark, FileText,
-  Mic, MicOff, Volume2, VolumeX
+  Mic, MicOff, Volume2, VolumeX, Pencil, Trash2
 } from "lucide-react";
 
 function ScoreBadge({ score }) {
@@ -36,9 +51,162 @@ function VerdictBadge({ verdict }) {
   return <span className={`text-[10px] tracking-[0.15em] font-bold px-2 py-0.5 border ${v.color}`}>{v.label}</span>;
 }
 
-export default function InterviewRoom() {
-  const { sessionId } = useParams();
-  const navigate = useNavigate();
+function EvaluationSourceBadge({ feedback }) {
+  const text = String(feedback || "");
+  const isDbFallback =
+    text.includes("DB-backed fallback evaluator") || text.includes("[evaluation_source: database_fallback]");
+  if (isDbFallback) {
+    return (
+      <span className="text-[10px] tracking-[0.12em] font-bold px-2 py-0.5 border text-blue-300 bg-blue-500/10 border-blue-500/30">
+        DB FALLBACK
+      </span>
+    );
+  }
+  return (
+    <span className="text-[10px] tracking-[0.12em] font-bold px-2 py-0.5 border text-yellow-300 bg-yellow-500/10 border-yellow-500/30">
+      AI
+    </span>
+  );
+}
+
+function normalizeStack(stack = "") {
+  const s = stack.toLowerCase();
+  if (s.includes("python")) return "python";
+  if (s.includes("java") && !s.includes("javascript")) return "java";
+  if (s.includes(".net") || s.includes("c#") || s.includes("dotnet")) return "dotnet";
+  if (s.includes("angular")) return "angular";
+  if (s.includes("react")) return "react";
+  if (s.includes("vue")) return "vue";
+  if (s.includes("ember")) return "ember";
+  if (s.includes("next")) return "nextjs";
+  if (s.includes("express")) return "express";
+  return "nodejs";
+}
+
+function defaultLanguageForStack(stack = "") {
+  const normalized = normalizeStack(stack);
+  if (normalized === "python") return "python";
+  if (normalized === "java") return "java";
+  if (normalized === "dotnet") return "csharp";
+  if (normalized === "angular") return "typescript";
+  return "javascript";
+}
+
+function defaultStarterCodeForStack(stack = "") {
+  const normalized = normalizeStack(stack);
+  const starters = {
+    nodejs: `function solve(input) {
+  // TODO: parse input and implement solution
+  return input.trim();
+}
+
+const fs = require("fs");
+const input = fs.readFileSync(0, "utf8");
+const output = solve(input);
+process.stdout.write(String(output));`,
+    react: `function solve(input) {
+  // TODO: parse input and implement solution
+  return input.trim();
+}
+
+const fs = require("fs");
+const input = fs.readFileSync(0, "utf8");
+console.log(solve(input));`,
+    vue: `function solve(input) {
+  // TODO: parse input and implement solution
+  return input.trim();
+}
+
+const fs = require("fs");
+const input = fs.readFileSync(0, "utf8");
+console.log(solve(input));`,
+    ember: `function solve(input) {
+  // TODO: parse input and implement solution
+  return input.trim();
+}
+
+const fs = require("fs");
+const input = fs.readFileSync(0, "utf8");
+console.log(solve(input));`,
+    nextjs: `function solve(input) {
+  // TODO: parse input and implement solution
+  return input.trim();
+}
+
+const fs = require("fs");
+const input = fs.readFileSync(0, "utf8");
+console.log(solve(input));`,
+    express: `function solve(input) {
+  // TODO: parse input and implement solution
+  return input.trim();
+}
+
+const fs = require("fs");
+const input = fs.readFileSync(0, "utf8");
+console.log(solve(input));`,
+    angular: `function solve(input: string): string {
+  // TODO: parse input and implement solution
+  return input.trim();
+}
+
+import * as fs from "fs";
+const input = fs.readFileSync(0, "utf8");
+console.log(solve(input));`,
+    python: `def solve(input_text: str) -> str:
+    # TODO: parse input and implement solution
+    return input_text.strip()
+
+if __name__ == "__main__":
+    import sys
+    data = sys.stdin.read()
+    print(solve(data))`,
+    java: `import java.io.*;
+
+public class Main {
+    static String solve(String input) {
+        // TODO: parse input and implement solution
+        return input.trim();
+    }
+
+    public static void main(String[] args) throws Exception {
+        String input = new String(System.in.readAllBytes());
+        System.out.print(solve(input));
+    }
+}`,
+    dotnet: `using System;
+
+public class Program {
+    static string Solve(string input) {
+        // TODO: parse input and implement solution
+        return input.Trim();
+    }
+
+    public static void Main() {
+        var input = Console.In.ReadToEnd();
+        Console.Write(Solve(input));
+    }
+}`,
+  };
+  return starters[normalized] || starters.nodejs;
+}
+
+function defaultTestCasesForStack(stack = "") {
+  const normalized = normalizeStack(stack);
+  const common = [
+    { label: "Case 1", input: "hello world\n", expectedOutput: "hello world" },
+    { label: "Case 2", input: "  sample text  \n", expectedOutput: "sample text" },
+  ];
+  if (normalized === "java" || normalized === "dotnet") {
+    return common;
+  }
+  return common;
+}
+
+export default function InterviewRoom({ sessionId }) {
+  const router = useRouter();
+  const resolvedSessionId =
+    sessionId || (typeof router.query?.sessionId === "string" ? router.query.sessionId : "");
+  const { user } = useAuth();
   const scrollRef = useRef(null);
 
   const [session, setSession] = useState(null);
@@ -53,6 +221,11 @@ export default function InterviewRoom() {
   const [interviewComplete, setInterviewComplete] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   const [useCodeEditor, setUseCodeEditor] = useState(false);
+  const [showEditorForExamples, setShowEditorForExamples] = useState(false);
+  const [codeRunLoading, setCodeRunLoading] = useState(false);
+  const [codeRunOutput, setCodeRunOutput] = useState("");
+  const [codeStdin, setCodeStdin] = useState("");
+  const [codeTestCases, setCodeTestCases] = useState([]);
   const [timerActive, setTimerActive] = useState(false);
   const [recordedAudioUrl, setRecordedAudioUrl] = useState("");
   const [cachedQuestions, setCachedQuestions] = useState([]);
@@ -89,9 +262,10 @@ export default function InterviewRoom() {
   const mediaChunksRef = useRef([]);
   const recordingStartedAtRef = useRef(null);
   const spokenQuestionIdRef = useRef(null);
-  const hasSpokenFeedbackRef = useRef(false);
+  const voiceCommittedRef = useRef("");
   const [recordedAudioBlob, setRecordedAudioBlob] = useState(null);
   const [recordedAudioDurationMs, setRecordedAudioDurationMs] = useState(null);
+  const [deletingAudioRoundId, setDeletingAudioRoundId] = useState("");
 
   const scrollToBottom = useCallback(() => {
     setTimeout(() => {
@@ -188,6 +362,7 @@ export default function InterviewRoom() {
     setIsRecording(false);
     mediaChunksRef.current = [];
     recordingStartedAtRef.current = Date.now();
+    voiceCommittedRef.current = (answerRef.current || "").trim();
     setRecordedAudioBlob(null);
     setRecordedAudioDurationMs(null);
     if (recordedAudioUrl) {
@@ -239,7 +414,12 @@ export default function InterviewRoom() {
         else interim += (interim ? " " : "") + chunk;
       }
       if (interim) setInterimTranscript(interim);
-      if (finalTranscript) setAnswer(finalTranscript.trim());
+      else setInterimTranscript("");
+      if (finalTranscript) {
+        const next = (voiceCommittedRef.current + (voiceCommittedRef.current ? " " : "") + finalTranscript).trim();
+        voiceCommittedRef.current = next;
+        setAnswer(next);
+      }
     };
 
     recognition.onerror = (event) => {
@@ -295,94 +475,195 @@ export default function InterviewRoom() {
   }, [currentRound, ttsEnabled, speakText]);
 
   useEffect(() => {
+    let cancelled = false;
     const load = async () => {
       try {
-        const res = await getSession(sessionId);
+        if (!resolvedSessionId) return;
+        const res = await getSession(resolvedSessionId);
+        if (cancelled) return;
         const fetchedSession = res.data.session;
         setSession(fetchedSession);
         setRounds(res.data.rounds);
+        if (res.data.usage?.hints?.length) {
+          const lines = {
+            other_active_guest_session_same_network:
+              "Another guest interview is open on this network. Finish it or this session may share the same question quota.",
+            possible_different_client_same_network:
+              "We see another browser or private window on the same network (different client id).",
+            other_active_session_same_account: "You have another active interview in another tab or window.",
+          };
+          for (const h of res.data.usage.hints) {
+            if (lines[h]) {
+              toast.info(lines[h], { duration: 7000 });
+            }
+          }
+        }
         setUsedQuestionIds(
           (res.data.rounds || [])
             .map((round) => round.question_id)
             .filter(Boolean)
         );
-        
+
         let localQuestions = [];
         if (fetchedSession.status !== "completed") {
           try {
             const questionPoolLimit = Math.max((fetchedSession.num_questions || 10) * 3, 20);
-            const qRes = await getQuestions(fetchedSession.tech_stack, questionPoolLimit);
+            const qRes = await getQuestions(
+              fetchedSession.tech_stack,
+              questionPoolLimit,
+              fetchedSession.difficulty,
+            );
             localQuestions = qRes.data || [];
             if (localQuestions.length === 0) {
-              const fallbackRes = await getQuestions(undefined, questionPoolLimit);
+              const fallbackRes = await getQuestions(undefined, questionPoolLimit, fetchedSession.difficulty);
               localQuestions = fallbackRes.data || [];
             }
-            setCachedQuestions(localQuestions);
-            setQuestionLoadError("");
+            if (!cancelled) {
+              setCachedQuestions(localQuestions);
+              setQuestionLoadError("");
+            }
           } catch (error) {
-            setQuestionLoadError("Failed to load interview questions.");
-            toast.error("Failed to load interview questions");
+            if (!cancelled) {
+              setQuestionLoadError("Failed to load interview questions.");
+              toast.error("Failed to load interview questions");
+            }
           }
         }
 
+        if (cancelled) return;
         if (fetchedSession.status === "completed") {
           setInterviewComplete(true);
         } else if (res.data.rounds.length === 0) {
-          fetchNextQuestion(localQuestions, fetchedSession);
+          await fetchNextQuestion(localQuestions, fetchedSession);
         } else {
           const lastRound = res.data.rounds[res.data.rounds.length - 1];
           if (!lastRound.answer) {
             setCurrentRound(lastRound);
+            setUseCodeEditor(lastRound.question_type === "coding");
+            if (lastRound.question_type === "coding" && !lastRound.answer) {
+              setAnswer(lastRound.coding_template || defaultStarterCodeForStack(fetchedSession.tech_stack || ""));
+              setCodeTestCases(lastRound.coding_test_cases || defaultTestCasesForStack(fetchedSession.tech_stack || ""));
+            }
           }
         }
       } catch (err) {
-        toast.error("Failed to load session");
+        if (!cancelled) toast.error("Failed to load session");
       } finally {
-        setInitialLoading(false);
+        if (!cancelled) setInitialLoading(false);
       }
     };
     load();
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId]);
+  }, [resolvedSessionId]);
 
-  const fetchNextQuestion = async (customQuestionsList = null, curSession = null) => {
+  const fetchNextQuestion = useCallback(async (customQuestionsList = null, curSession = null) => {
     setLoadingQuestion(true);
     setShowHint(false);
     setTimerActive(false);
     try {
-      const qs = customQuestionsList || cachedQuestions;
       const s = curSession || session;
-      const usedIds = new Set(
-        (usedQuestionIds || []).concat((rounds || []).map((r) => r.question_id).filter(Boolean))
-      );
-      const question = qs.find((q) => q?.id && !usedIds.has(q.id));
-      
-      if (!question) {
-        const msg = questionLoadError || "No more questions available for this interview.";
-        toast.error(msg);
-        setLoadingQuestion(false);
-        return;
-      }
-      
-      const res = await createRound(sessionId, question.id);
+      const res = await generateQuestion(resolvedSessionId);
       setCurrentRound(res.data);
       setRounds((prev) => [...prev, res.data]);
       setUseCodeEditor(res.data.question_type === "coding");
-      setSession(prev => ({ ...prev, questions_asked: res.data.order }));
-      setUsedQuestionIds((prev) => [...new Set([...prev, question.id])]);
-      setCachedQuestions((prev) => prev.filter((item) => item.id !== question.id));
+      setShowEditorForExamples(false);
+      setCodeRunOutput("");
+      setCodeStdin("");
+      setCodeTestCases(
+        res.data?.coding_test_cases || defaultTestCasesForStack(s?.tech_stack || session?.tech_stack || ""),
+      );
+      if (res.data.question_type === "coding") {
+        setAnswer(
+          res.data?.coding_template ||
+            defaultStarterCodeForStack(s?.tech_stack || session?.tech_stack || ""),
+        );
+      }
+      setSession((prev) => ({ ...prev, questions_asked: res.data.order }));
+      if (res.data?.question_id) {
+        setUsedQuestionIds((prev) => [...new Set([...prev, res.data.question_id])]);
+      }
 
       if (s?.timed_mode) setTimerActive(true);
       scrollToBottom();
     } catch (err) {
-      const msg = err?.response?.data?.detail || "Failed to load question. Please try again.";
+      const raw = err?.response?.data?.message;
+      const msg = Array.isArray(raw)
+        ? raw.join(" ")
+        : raw || err?.response?.data?.detail || "Failed to load question. Please try again.";
       toast.error(msg);
     } finally {
       setLoadingQuestion(false);
     }
-  };
+  }, [resolvedSessionId, scrollToBottom, session]);
 
-  const [streamingFeedback, setStreamingFeedback] = useState("");
+  const handleRunCode = useCallback(async () => {
+    if (!answer.trim()) {
+      toast.error("Write code first to run it.");
+      return;
+    }
+    setCodeRunLoading(true);
+    setCodeRunOutput("");
+    try {
+      const res = await runCode(session?.tech_stack || "nodejs", answer, codeStdin);
+      const payload = res?.data || {};
+      const output = [
+        payload.compile_output ? `Compile:\n${payload.compile_output}` : "",
+        payload.output ? `Output:\n${payload.output}` : "",
+        payload.stderr && !payload.output ? `Errors:\n${payload.stderr}` : "",
+      ]
+        .filter(Boolean)
+        .join("\n\n");
+      setCodeRunOutput(output || "Execution completed with no output.");
+    } catch (err) {
+      const msg = err?.response?.data?.message || "Failed to run code.";
+      setCodeRunOutput(`Error:\n${msg}`);
+      toast.error("Code execution failed.");
+    } finally {
+      setCodeRunLoading(false);
+    }
+  }, [answer, codeStdin, session?.tech_stack]);
+
+  const handleRunAllTests = useCallback(async () => {
+    if (!answer.trim()) {
+      toast.error("Write code first to run test cases.");
+      return;
+    }
+    if (!codeTestCases.length) {
+      toast.error("Add at least one test case.");
+      return;
+    }
+    setCodeRunLoading(true);
+    try {
+      const results = [];
+      for (const t of codeTestCases) {
+        const res = await runCode(session?.tech_stack || "nodejs", answer, t.input || "");
+        const out = String(res?.data?.output || "").trim();
+        const expected = String(t.expectedOutput || "").trim();
+        results.push({
+          label: t.label || "Case",
+          passed: out === expected,
+          expected,
+          got: out,
+        });
+      }
+      const passCount = results.filter((r) => r.passed).length;
+      const lines = results.map((r) =>
+        `${r.passed ? "PASS" : "FAIL"} ${r.label}\nExpected: ${r.expected}\nGot: ${r.got}`,
+      );
+      setCodeRunOutput(`Test Summary: ${passCount}/${results.length} passed\n\n${lines.join("\n\n")}`);
+      if (passCount === results.length) toast.success("All test cases passed.");
+      else toast.warning(`${passCount}/${results.length} tests passed.`);
+    } catch (err) {
+      const msg = err?.response?.data?.message || "Failed to run test cases.";
+      setCodeRunOutput(`Error:\n${msg}`);
+      toast.error("Test run failed.");
+    } finally {
+      setCodeRunLoading(false);
+    }
+  }, [answer, codeTestCases, session?.tech_stack]);
 
   const handleSubmitAnswer = useCallback(async () => {
     const round = currentRoundRef.current;
@@ -391,8 +672,6 @@ export default function InterviewRoom() {
 
     setEvaluating(true);
     setTimerActive(false);
-    setStreamingFeedback("");
-    hasSpokenFeedbackRef.current = false;
 
     stopRecording();
     try {
@@ -401,25 +680,11 @@ export default function InterviewRoom() {
       }
     } catch {}
 
-    const maybeCompleteInterview = async () => {
-      const sess = await getSession(sessionId);
-      setSession(sess.data.session);
-      if (sess.data.session.questions_asked < sess.data.session.num_questions) return;
-      try {
-        const res = await completeSession(sessionId);
-        setSession(res.data.session);
-        setInterviewComplete(true);
-        toast.success("Interview completed!");
-      } catch {
-        toast.error("Failed to complete session");
-      }
-    };
-
     const maybeUploadAudio = async () => {
       if (!recordedAudioBlob) return null;
       try {
         const audioRes = await uploadAnswerAudio(
-          sessionId,
+          resolvedSessionId,
           round.id,
           recordedAudioBlob,
           answerText,
@@ -437,71 +702,10 @@ export default function InterviewRoom() {
     const uploadedAudio = await maybeUploadAudio();
 
     try {
-      const API_BASE = process.env.REACT_APP_BACKEND_URL;
-      const response = await fetch(`${API_BASE}/api/interview/evaluate-stream`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ session_id: sessionId, round_id: round.id, answer: answerText }),
-      });
-
-      if (!response.ok) {
-        const errText = await response.text().catch(() => "");
-        throw new Error(`Evaluation failed (${response.status}). ${errText ? errText.slice(0, 200) : ""}`.trim());
-      }
-      if (!response.body?.getReader) {
-        throw new Error("Streaming feedback is not supported by this browser.");
-      }
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let feedbackText = "";
-      let completeData = null;
-      let buffer = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        const text = decoder.decode(value, { stream: true });
-        buffer += text;
-        const parts = buffer.split("\n\n");
-        buffer = parts.pop() || "";
-        for (const part of parts) {
-          const event = part.trim();
-          if (!event.startsWith("data:")) continue;
-          const payload = event.replace("data:", "").trim();
-          if (payload === "[DONE]") continue;
-          try {
-            const parsed = JSON.parse(payload);
-            if (parsed.type === "text") {
-              feedbackText += parsed.text;
-              setStreamingFeedback(feedbackText);
-              scrollToBottom();
-              const didSpeak = speakText(parsed.text, { cancelExisting: false });
-              if (didSpeak) hasSpokenFeedbackRef.current = true;
-            } else if (parsed.type === "complete") {
-              completeData = parsed.data;
-            } else if (parsed.type === "error") {
-              toast.error(parsed.text);
-            }
-          } catch {}
-        }
-      }
-
-      if (completeData) {
-        setRounds((prev) => prev.map((r) => (
-          r.id === round.id ? { ...r, ...(uploadedAudio || {}), ...completeData } : r
-        )));
-        const feedbackStr = typeof completeData?.feedback === "string" ? completeData.feedback.trim() : "";
-        const followUpStr = typeof completeData?.follow_up_question === "string" ? completeData.follow_up_question.trim() : "";
-        if (!hasSpokenFeedbackRef.current && feedbackStr) {
-          speakText(feedbackStr, { cancelExisting: false });
-        }
-        if (followUpStr) {
-          speakText(followUpStr, { cancelExisting: false });
-        }
-      }
-      setStreamingFeedback("");
+      const submittedRes = round.answer
+        ? await updateSubmittedAnswer(resolvedSessionId, round.id, answerText)
+        : await submitAnswer(resolvedSessionId, round.id, answerText);
+      const submittedRound = submittedRes.data;
       setCurrentRound(null);
       setAnswer("");
       setRecordedAudioBlob(null);
@@ -510,53 +714,106 @@ export default function InterviewRoom() {
         URL.revokeObjectURL(recordedAudioUrl);
         setRecordedAudioUrl("");
       }
+      setRounds((prev) =>
+        prev.map((r) => (r.id === round.id ? { ...r, ...(uploadedAudio || {}), ...submittedRound } : r)),
+      );
       scrollToBottom();
+      setSession((prev) => ({ ...prev, questions_asked: submittedRound.order }));
 
-      await maybeCompleteInterview();
-    } catch (err) {
-      // Fallback to regular endpoint
-      try {
-        const res = await evaluateAnswer(sessionId, round.id, answerText);
-        setRounds((prev) => prev.map((r) => (
-          r.id === round.id ? { ...r, ...(uploadedAudio || {}), ...res.data } : r
-        )));
-        setCurrentRound(null);
-        setAnswer("");
-        setRecordedAudioBlob(null);
-        setRecordedAudioDurationMs(null);
-        if (recordedAudioUrl) {
-          URL.revokeObjectURL(recordedAudioUrl);
-          setRecordedAudioUrl("");
+      const isLastQuestion = submittedRound.order >= (session?.num_questions || 0);
+      if (isLastQuestion) {
+        try {
+          const res = await completeSession(resolvedSessionId);
+          setSession(res.data.session);
+          setRounds(res.data.rounds || []);
+          setInterviewComplete(true);
+          if (res.data.ai_status === "db_only") {
+            toast.success("Interview completed and evaluated using DB feedback.");
+          } else if (res.data.ai_status === "not_configured") {
+            toast.warning("Interview completed. AI evaluation skipped because Gemini API key is not configured.");
+          } else if (res.data.ai_status === "rate_limited") {
+            toast.warning(
+              "Interview completed. AI hit limits, but your answers were still scored with the database reference model.",
+            );
+          } else if (res.data.session?.avg_score === null) {
+            toast.warning("Interview completed. Answers were saved, but AI scoring is currently unavailable.");
+          } else {
+            toast.success("Interview completed and evaluated!");
+          }
+        } catch {
+          toast.error("Answer saved, but failed to complete session.");
         }
-        const feedbackStr = typeof res.data?.feedback === "string" ? res.data.feedback.trim() : "";
-        const followUpStr = typeof res.data?.follow_up_question === "string" ? res.data.follow_up_question.trim() : "";
-        if (!hasSpokenFeedbackRef.current && feedbackStr) {
-          speakText(feedbackStr, { cancelExisting: false });
-        }
-        if (followUpStr) {
-          speakText(followUpStr, { cancelExisting: false });
-        }
-        await maybeCompleteInterview();
-      } catch {
-        toast.error("Failed to evaluate answer. AI may be busy — try again.");
       }
+    } catch {
+      toast.error("Failed to save answer. Please try again.");
     } finally {
       setEvaluating(false);
-      setStreamingFeedback("");
     }
   }, [
-    sessionId,
+    resolvedSessionId,
     stopRecording,
-    speakText,
     scrollToBottom,
     recordedAudioBlob,
     recordedAudioDurationMs,
     recordedAudioUrl,
+    session,
   ]);
+
+  const clearRecordedAudioPreview = useCallback(() => {
+    setRecordedAudioBlob(null);
+    setRecordedAudioDurationMs(null);
+    if (recordedAudioUrl) {
+      URL.revokeObjectURL(recordedAudioUrl);
+      setRecordedAudioUrl("");
+    }
+  }, [recordedAudioUrl]);
+
+  const handleEditRound = useCallback((round) => {
+    if (!round?.answer) return;
+    if (round.score !== null) {
+      toast.error("Answer can no longer be edited after evaluation.");
+      return;
+    }
+    if (currentRound && !currentRound.answer && currentRound.id !== round.id) {
+      toast.error("Submit the current draft question first.");
+      return;
+    }
+    setCurrentRound(round);
+    setUseCodeEditor(round.question_type === "coding");
+    setShowEditorForExamples(false);
+    setCodeRunOutput("");
+    setCodeStdin("");
+    setCodeTestCases(round.coding_test_cases || defaultTestCasesForStack(session?.tech_stack || ""));
+    setAnswer(
+      round.answer ||
+        (round.question_type === "coding"
+          ? round.coding_template || defaultStarterCodeForStack(session?.tech_stack || "")
+          : ""),
+    );
+    clearRecordedAudioPreview();
+    setShowHint(false);
+    if (session?.timed_mode) setTimerActive(true);
+    scrollToBottom();
+  }, [clearRecordedAudioPreview, currentRound, scrollToBottom, session]);
+
+  const handleDeleteRoundAudio = useCallback(async (roundId) => {
+    if (!roundId || deletingAudioRoundId) return;
+    setDeletingAudioRoundId(roundId);
+    try {
+      const res = await deleteAnswerAudio(resolvedSessionId, roundId);
+      setRounds((prev) => prev.map((r) => (r.id === roundId ? { ...r, ...res.data } : r)));
+      if (currentRound?.id === roundId) clearRecordedAudioPreview();
+      toast.success("Audio clip deleted.");
+    } catch {
+      toast.error("Failed to delete audio clip.");
+    } finally {
+      setDeletingAudioRoundId("");
+    }
+  }, [clearRecordedAudioPreview, currentRound, deletingAudioRoundId, resolvedSessionId]);
 
   const handleEndInterview = async () => {
     try {
-      const res = await completeSession(sessionId);
+      const res = await completeSession(resolvedSessionId);
       setSession(res.data.session);
       setInterviewComplete(true);
       toast.success("Interview completed!");
@@ -564,6 +821,9 @@ export default function InterviewRoom() {
       toast.error("Failed to complete session");
     }
   };
+
+  const effectiveUseCodeEditor = useCodeEditor || showEditorForExamples;
+  const editorLanguage = defaultLanguageForStack(session?.tech_stack || "");
 
   const handleTimeUp = useCallback(() => {
     if (currentRoundRef.current) {
@@ -579,7 +839,7 @@ export default function InterviewRoom() {
 
   const handleBookmark = async (roundId) => {
     try {
-      await createBookmark(sessionId, roundId);
+      await createBookmark(resolvedSessionId, roundId);
       toast.success("Question bookmarked!");
     } catch {
       toast.error("Failed to bookmark");
@@ -629,7 +889,7 @@ export default function InterviewRoom() {
           {interviewComplete && (
             <button
               data-testid="view-report-btn"
-              onClick={() => navigate(`/report/${sessionId}`)}
+              onClick={() => router.push(`/report/${resolvedSessionId}`)}
               className="flex items-center gap-1 px-3 py-1 text-xs font-bold text-zinc-400 border border-[#27272A] hover:border-yellow-500 hover:text-yellow-500 transition-colors"
             >
               <FileText className="w-3 h-3" /> REPORT
@@ -695,7 +955,7 @@ export default function InterviewRoom() {
                       {round.question_type}
                     </Badge>
                     <span className="text-[10px] text-zinc-600">{round.topic}</span>
-                    {round.answer && (
+                    {round.answer && user && (
                       <button
                         data-testid={`bookmark-btn-${round.id}`}
                         onClick={() => handleBookmark(round.id)}
@@ -723,6 +983,15 @@ export default function InterviewRoom() {
                           <span className="text-[10px] font-bold text-white">YOU</span>
                         </div>
                         <span className="text-xs font-bold text-zinc-400">YOUR ANSWER</span>
+                        {!interviewComplete && round.score === null && (
+                          <button
+                            onClick={() => handleEditRound(round)}
+                            className="ml-auto text-zinc-500 hover:text-yellow-500 transition-colors"
+                            title="Edit this answer"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                       </div>
                       <div className="ml-8 p-3 bg-[#0A0A0A] border border-[#27272A] text-sm text-zinc-300 whitespace-pre-wrap">
                         {round.answer}
@@ -737,6 +1006,16 @@ export default function InterviewRoom() {
                           >
                             Your browser does not support audio playback.
                           </audio>
+                          {!interviewComplete && round.score === null && (
+                            <button
+                              onClick={() => handleDeleteRoundAudio(round.id)}
+                              disabled={deletingAudioRoundId === round.id}
+                              className="mt-2 text-[11px] text-red-400 hover:text-red-300 disabled:opacity-60 inline-flex items-center gap-1"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                              {deletingAudioRoundId === round.id ? "Deleting..." : "Delete audio"}
+                            </button>
+                          )}
                         </div>
                       )}
                     </div>
@@ -752,6 +1031,7 @@ export default function InterviewRoom() {
                             <span className="text-[10px] font-bold text-black">AI</span>
                           </div>
                           <span className="text-xs font-bold text-yellow-500">EVALUATION</span>
+                          <EvaluationSourceBadge feedback={round.feedback} />
                           <ScoreBadge score={round.score} />
                           <VerdictBadge verdict={round.verdict} />
                         </div>
@@ -832,18 +1112,13 @@ export default function InterviewRoom() {
             </motion.div>
           )}
 
-          {/* Evaluating with streaming feedback */}
+          {/* Saving answer */}
           {evaluating && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="ml-8">
               <div className="flex items-center gap-2 mb-2 text-xs text-zinc-500">
                 <Loader2 className="w-3 h-3 animate-spin text-yellow-500" />
-                AI is evaluating your answer...
+                Saving your answer...
               </div>
-              {streamingFeedback && (
-                <div className="p-3 bg-[#121212] border border-yellow-500/20 text-xs text-zinc-300 leading-relaxed">
-                  {streamingFeedback}<span className="text-yellow-500 animate-blink">_</span>
-                </div>
-              )}
             </motion.div>
           )}
 
@@ -873,21 +1148,21 @@ export default function InterviewRoom() {
               <div className="flex gap-3">
                 <button
                   data-testid="new-interview-btn"
-                  onClick={() => navigate("/setup")}
+                  onClick={() => router.push("/setup")}
                   className="bg-yellow-500 text-black font-bold text-xs px-4 py-2 hover:bg-yellow-400 transition-colors flex items-center gap-1"
                 >
                   NEW INTERVIEW <ArrowRight className="w-3 h-3" />
                 </button>
                 <button
                   data-testid="view-report-link"
-                  onClick={() => navigate(`/report/${sessionId}`)}
+                  onClick={() => router.push(`/report/${resolvedSessionId}`)}
                   className="border border-yellow-500/50 text-yellow-500 font-bold text-xs px-4 py-2 hover:bg-yellow-500/10 transition-colors flex items-center gap-1"
                 >
                   <FileText className="w-3 h-3" /> VIEW REPORT
                 </button>
                 <button
                   data-testid="view-dashboard-btn"
-                  onClick={() => navigate("/dashboard")}
+                  onClick={() => router.push("/dashboard")}
                   className="border border-zinc-700 text-white font-bold text-xs px-4 py-2 hover:bg-zinc-800 transition-colors flex items-center gap-1"
                 >
                   <BarChart3 className="w-3 h-3" /> DASHBOARD
@@ -964,22 +1239,22 @@ export default function InterviewRoom() {
                 <audio controls preload="metadata" className="w-full max-w-md" src={recordedAudioUrl}>
                   Your browser does not support audio playback.
                 </audio>
+                <button
+                  onClick={clearRecordedAudioPreview}
+                  className="mt-2 text-[11px] text-red-400 hover:text-red-300 inline-flex items-center gap-1"
+                >
+                  <Trash2 className="w-3 h-3" />
+                  Delete clip
+                </button>
               </div>
             )}
             <div className="flex gap-2">
-              {useCodeEditor && currentRound && !currentRound.answer ? (
+              {effectiveUseCodeEditor && currentRound && !currentRound.answer ? (
                 <div className="flex-1">
                   <CodeEditor
                     value={answer}
                     onChange={(val) => setAnswer(val || "")}
-                    language={(() => {
-                      const s = (session?.tech_stack || "").toLowerCase();
-                      if (s.includes("python") || s.includes("django")) return "python";
-                      if (s.includes("java") && !s.includes("javascript")) return "java";
-                      if (s.includes(".net") || s.includes("c#")) return "csharp";
-                      if (s.includes("angular") || s.includes("react") || s.includes("vue") || s.includes("node") || s.includes("ember")) return "typescript";
-                      return "javascript";
-                    })()}
+                    language={editorLanguage}
                     height="200px"
                   />
                 </div>
@@ -1000,6 +1275,40 @@ export default function InterviewRoom() {
               <div className="flex flex-col gap-2">
                 {currentRound && !currentRound.answer ? (
                   <>
+                    {currentRound.question_type !== "coding" && (
+                      <button
+                        onClick={() => setShowEditorForExamples((v) => !v)}
+                        className="bg-zinc-800 text-white font-bold text-xs px-4 py-2 hover:bg-zinc-700 transition-colors flex items-center gap-1"
+                      >
+                        {effectiveUseCodeEditor ? "HIDE EDITOR" : "SHOW EDITOR"}
+                      </button>
+                    )}
+                    {effectiveUseCodeEditor && (
+                      <button
+                        onClick={handleRunCode}
+                        disabled={codeRunLoading || evaluating || loadingQuestion}
+                        className="bg-blue-600 text-white font-bold text-xs px-4 py-2 hover:bg-blue-500 transition-colors disabled:opacity-50 flex items-center gap-1"
+                      >
+                        {codeRunLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : "RUN CODE"}
+                      </button>
+                    )}
+                    {effectiveUseCodeEditor && (
+                      <button
+                        onClick={handleRunAllTests}
+                        disabled={codeRunLoading || evaluating || loadingQuestion}
+                        className="bg-emerald-600 text-white font-bold text-xs px-4 py-2 hover:bg-emerald-500 transition-colors disabled:opacity-50 flex items-center gap-1"
+                      >
+                        {codeRunLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : "RUN TESTS"}
+                      </button>
+                    )}
+                    {effectiveUseCodeEditor && !answer.trim() && (
+                      <button
+                        onClick={() => setAnswer(defaultStarterCodeForStack(session?.tech_stack || ""))}
+                        className="bg-zinc-700 text-white font-bold text-xs px-4 py-2 hover:bg-zinc-600 transition-colors"
+                      >
+                        INSERT STARTER
+                      </button>
+                    )}
                     <button
                       data-testid="voice-record-btn"
                       onClick={() => (isRecording ? stopRecording() : startRecording())}
@@ -1017,7 +1326,7 @@ export default function InterviewRoom() {
                       className="bg-yellow-500 text-black font-bold text-xs px-4 py-2 hover:bg-yellow-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
                     >
                       {evaluating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
-                      SUBMIT
+                      {currentRound?.answer ? "UPDATE" : "SUBMIT"}
                     </button>
                   </>
                 ) : (
@@ -1033,6 +1342,56 @@ export default function InterviewRoom() {
                 )}
               </div>
             </div>
+            {effectiveUseCodeEditor && codeRunOutput && (
+              <pre className="mt-3 bg-[#0A0A0A] border border-[#27272A] text-xs text-zinc-300 p-3 whitespace-pre-wrap max-h-48 overflow-auto">
+                {codeRunOutput}
+              </pre>
+            )}
+            {effectiveUseCodeEditor && (
+              <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[10px] tracking-[0.15em] text-zinc-500 block mb-1">STDIN (single run)</label>
+                  <textarea
+                    value={codeStdin}
+                    onChange={(e) => setCodeStdin(e.target.value)}
+                    rows={4}
+                    className="w-full bg-[#0A0A0A] border border-[#27272A] text-xs text-white p-2 resize-y"
+                    placeholder="Input for RUN CODE..."
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] tracking-[0.15em] text-zinc-500 block mb-1">TEST CASES</label>
+                  <div className="space-y-2 max-h-52 overflow-auto pr-1">
+                    {codeTestCases.map((t, idx) => (
+                      <div key={`${t.label}-${idx}`} className="border border-[#27272A] p-2">
+                        <div className="text-[10px] text-zinc-500 mb-1">{t.label}</div>
+                        <textarea
+                          value={t.input}
+                          onChange={(e) =>
+                            setCodeTestCases((prev) =>
+                              prev.map((x, i) => (i === idx ? { ...x, input: e.target.value } : x)),
+                            )
+                          }
+                          rows={2}
+                          className="w-full bg-[#0A0A0A] border border-[#27272A] text-[11px] text-white p-2 mb-1"
+                          placeholder="stdin"
+                        />
+                        <input
+                          value={t.expectedOutput}
+                          onChange={(e) =>
+                            setCodeTestCases((prev) =>
+                              prev.map((x, i) => (i === idx ? { ...x, expectedOutput: e.target.value } : x)),
+                            )
+                          }
+                          className="w-full bg-[#0A0A0A] border border-[#27272A] text-[11px] text-white p-2"
+                          placeholder="expected output"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
             <p className="text-[10px] text-zinc-600 mt-1">Ctrl+Enter to submit</p>
           </div>
         </div>
