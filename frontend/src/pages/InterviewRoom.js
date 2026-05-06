@@ -73,6 +73,7 @@ function normalizeStack(stack = "") {
   const s = stack.toLowerCase();
   if (s.includes("python")) return "python";
   if (s.includes("java") && !s.includes("javascript")) return "java";
+  if (s.includes("javascript")) return "javascript";
   if (s.includes(".net") || s.includes("c#") || s.includes("dotnet")) return "dotnet";
   if (s.includes("angular")) return "angular";
   if (s.includes("react")) return "react";
@@ -186,6 +187,14 @@ public class Program {
         Console.Write(Solve(input));
     }
 }`,
+    javascript: `function solve(input) {
+  // TODO: parse input and implement solution
+  return input.trim();
+}
+
+const fs = require("fs");
+const input = fs.readFileSync(0, "utf8");
+process.stdout.write(String(solve(input)));`,
   };
   return starters[normalized] || starters.nodejs;
 }

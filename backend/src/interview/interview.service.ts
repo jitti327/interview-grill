@@ -213,10 +213,18 @@ export class InterviewService {
   }
 
   private normalizeStack(value?: string): string {
-    const raw = (value || '').trim().toLowerCase().replace(/\s+/g, '').replace(/\./g, '');
+    const raw = (value || '')
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, '')
+      .replace(/\./g, '')
+      .replace(/[()]/g, '');
     const aliases: Record<string, string> = {
       node: 'nodejs',
       nodejs: 'nodejs',
+      javascript: 'javascript',
+      javascriptcore: 'javascript',
+      js: 'javascript',
       reactjs: 'react',
       vuejs: 'vue',
       angularjs: 'angular',
@@ -229,7 +237,6 @@ export class InterviewService {
       dotnet: 'dotnet',
       'c#': 'dotnet',
       csharp: 'dotnet',
-      javascript: 'nodejs',
       typescript: 'nodejs',
     };
     return aliases[raw] || raw;

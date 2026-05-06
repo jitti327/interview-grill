@@ -12,7 +12,7 @@ const categories = [
     id: "frontend",
     label: "Frontend",
     icon: Code2,
-    stacks: ["React", "Angular", "Vue", "Ember"],
+    stacks: ["React", "Angular", "Vue", "Ember", "JavaScript Core"],
     desc: "Build pixel-perfect interfaces",
   },
   {

@@ -1,0 +1,16 @@
+{
+  "name": "interview-grill",
+  "private": true,
+  "description": "Root helpers — packages live in backend/ and frontend/. Use scripts below or cd into those folders.",
+  "scripts": {
+    "install:all": "npm install --prefix backend && npm install --prefix frontend",
+    "dev": "npm run dev:backend",
+    "dev:backend": "cd backend && npm run start:dev",
+    "dev:frontend": "cd frontend && npm run dev",
+    "build:backend": "cd backend && npm run build",
+    "build:frontend": "cd frontend && npm run build",
+    "seed-questions": "cd backend && npm run seed-questions",
+    "start:backend": "cd backend && npm run start",
+    "start:frontend": "cd frontend && npm run start:prod"
+  }
+}

@@ -9,6 +9,7 @@ const STACK_DISPLAY: Record<string, string> = {
   vue: 'Vue',
   ember: 'Ember',
   nodejs: 'Node.js',
+  javascript: 'JavaScript',
   express: 'Express',
   nextjs: 'Next.js',
   python: 'Python',

@@ -9,7 +9,10 @@ import { useAuth } from "@/contexts/AuthContext";
 import { ArrowRight, Loader2, Clock, Timer } from "lucide-react";
 
 const CATEGORIES = {
-  frontend: { label: "Frontend", stacks: ["React", "Angular", "Vue", "Ember"] },
+  frontend: {
+    label: "Frontend",
+    stacks: ["React", "Angular", "Vue", "Ember", "JavaScript Core"],
+  },
   backend: { label: "Backend", stacks: ["Node.js", "Java", ".NET", "Python"] },
   fullstack: { label: "Full Stack", stacks: ["MERN Stack", "MEAN Stack", "Django + React", "Spring + Angular"] },
   system_design: { label: "System Design", stacks: ["Distributed Systems", "Scalability", "Microservices", "Database Design"] },

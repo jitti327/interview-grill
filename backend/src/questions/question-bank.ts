@@ -1,24 +1,9 @@
 import { buildExpectedKeyPoints, buildReferenceSampleAnswer, type Difficulty } from './question-reference';
+import { buildJavaScriptInterviewCoreSeeds } from './javascript-interview-core-seeds';
+import type { QuestionSeed } from './question-types';
 
 export type { Difficulty } from './question-reference';
-
-type QuestionSeed = {
-  id: string;
-  stack: string;
-  tech_stack: string;
-  difficulty: Difficulty;
-  question_type: 'conceptual' | 'coding' | 'scenario';
-  category: string;
-  topic: string;
-  question: string;
-  expected_key_points: string[];
-  hint: string;
-  coding_template?: string | null;
-  coding_test_cases?: Array<{ label: string; input: string; expected_output: string }> | null;
-  sample_answer?: string[];
-  tags: string[];
-  is_active: boolean;
-};
+export type { QuestionSeed } from './question-types';
 
 const STACK_TOPICS: Record<string, string[]> = {
   angular: ['change detection', 'dependency injection', 'rxjs', 'routing', 'forms', 'performance'],
@@ -31,6 +16,14 @@ const STACK_TOPICS: Record<string, string[]> = {
   python: ['data structures', 'asyncio', 'testing', 'packaging', 'performance', 'web patterns'],
   java: ['collections', 'jvm', 'concurrency', 'spring', 'testing', 'performance'],
   dotnet: ['aspnet', 'dependency injection', 'linq', 'async', 'testing', 'performance'],
+  javascript: [
+    'lexical scope & closures',
+    'this & functions',
+    'async patterns',
+    'prototypes & objects',
+    'events & DOM',
+    'modules & tooling',
+  ],
 };
 
 const STEMS: Record<Difficulty, string[]> = {
@@ -54,6 +47,7 @@ const STEMS: Record<Difficulty, string[]> = {
 const QUESTION_TYPES: Array<'conceptual' | 'coding' | 'scenario'> = ['conceptual', 'coding', 'scenario'];
 
 function titleCase(value: string): string {
+  if (value.toLowerCase() === 'javascript') return 'JavaScript';
   return value
     .split(/[\s-]+/)
     .map((x) => x.charAt(0).toUpperCase() + x.slice(1))
@@ -170,6 +164,8 @@ export function buildQuestionBank(): QuestionSeed[] {
       }
     }
   }
+
+  result.push(...buildJavaScriptInterviewCoreSeeds());
 
   return result;
 }
