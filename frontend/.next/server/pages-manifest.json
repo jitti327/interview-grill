@@ -1,6 +1,19 @@
 {
   "/_app": "pages/_app.js",
+  "/admin/questions": "pages/admin/questions.html",
   "/_error": "pages/_error.js",
+  "/compare": "pages/compare.html",
+  "/dashboard": "pages/dashboard.html",
+  "/history": "pages/history.html",
+  "/": "pages/index.html",
+  "/leaderboard": "pages/leaderboard.html",
+  "/login": "pages/login.html",
+  "/report/[sessionId]": "pages/report/[sessionId].html",
+  "/interview/[sessionId]": "pages/interview/[sessionId].html",
+  "/register": "pages/register.html",
+  "/setup": "pages/setup.html",
+  "/study-plan": "pages/study-plan.html",
+  "/verify-email": "pages/verify-email.html",
   "/_document": "pages/_document.js",
-  "/": "pages/index.js"
+  "/404": "pages/404.html"
 }

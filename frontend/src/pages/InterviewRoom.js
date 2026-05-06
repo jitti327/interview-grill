@@ -739,7 +739,7 @@ export default function InterviewRoom({ sessionId }) {
           if (res.data.ai_status === "db_only") {
             toast.success("Interview completed and evaluated using DB feedback.");
           } else if (res.data.ai_status === "not_configured") {
-            toast.warning("Interview completed. AI evaluation skipped because Gemini API key is not configured.");
+            toast.warning("Interview completed. AI evaluation skipped because AI provider is not configured.");
           } else if (res.data.ai_status === "rate_limited") {
             toast.warning(
               "Interview completed. AI hit limits, but your answers were still scored with the database reference model.",
@@ -753,7 +753,29 @@ export default function InterviewRoom({ sessionId }) {
           toast.error("Answer saved, but failed to complete session.");
         }
       }
-    } catch {
+    } catch (err) {
+      if (err?.response?.status === 409) {
+        try {
+          const latest = await getSession(resolvedSessionId);
+          const latestSession = latest?.data?.session;
+          const latestRounds = latest?.data?.rounds || [];
+          setSession(latestSession || session);
+          setRounds(latestRounds);
+          setCurrentRound(null);
+          setAnswer("");
+          setRecordedAudioBlob(null);
+          setRecordedAudioDurationMs(null);
+          if (recordedAudioUrl) {
+            URL.revokeObjectURL(recordedAudioUrl);
+            setRecordedAudioUrl("");
+          }
+          toast.info("Answer was already saved. Synced the latest state.");
+          return;
+        } catch {
+          toast.error("Answer may have been saved, but failed to sync latest state.");
+          return;
+        }
+      }
       toast.error("Failed to save answer. Please try again.");
     } finally {
       setEvaluating(false);

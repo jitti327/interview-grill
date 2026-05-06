@@ -1,28 +1,67 @@
 import { Injectable } from '@nestjs/common';
-import { GoogleGenerativeAI } from '@google/generative-ai';
 
 @Injectable()
 export class AiService {
-  private genAI: GoogleGenerativeAI;
-  private models = ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.0-flash'];
-  private readonly apiKey: string;
+  private readonly openRouterApiKey: string;
+  private readonly defaultModels: string[];
 
   constructor() {
-    this.apiKey = this.resolveApiKey();
-    this.genAI = new GoogleGenerativeAI(this.apiKey);
+    this.openRouterApiKey = (process.env.OPENROUTER_API_KEY || '').trim();
+    this.defaultModels = this.resolveDefaultModels();
   }
 
-  private resolveApiKey(): string {
-    return (
-      process.env.GEMINI_API_KEY?.trim() ||
-      process.env.GOOGLE_API_KEY?.trim() ||
-      process.env.GOOGLE_GEMINI_API_KEY?.trim() ||
-      ''
-    );
+  private parseModelsCsv(value?: string): string[] {
+    return String(value || '')
+      .split(',')
+      .map((m) => m.trim())
+      .filter(Boolean);
+  }
+
+  private resolveDefaultModels(): string[] {
+    const generic = this.parseModelsCsv(process.env.AI_MODELS);
+    if (generic.length) return generic;
+    const openRouterModels = this.parseModelsCsv(process.env.OPENROUTER_MODELS || process.env.OPENROUTER_MODEL);
+    if (openRouterModels.length) return openRouterModels;
+    return ['meta-llama/llama-3.3-70b-instruct:free', 'qwen/qwen3-coder:free'];
   }
 
   isConfigured(): boolean {
-    return Boolean(this.apiKey);
+    return Boolean(this.openRouterApiKey);
+  }
+
+  private async generateWithOpenRouter(
+    systemPrompt: string,
+    userText: string,
+    modelName: string,
+  ): Promise<string> {
+    if (!this.openRouterApiKey) {
+      throw new Error('OpenRouter API key is not configured');
+    }
+    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${this.openRouterApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: modelName,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userText },
+        ],
+        temperature: 0.2,
+      }),
+    });
+    if (!response.ok) {
+      const body = await response.text();
+      throw new Error(`OpenRouter error ${response.status}: ${body}`);
+    }
+    const data: any = await response.json();
+    const text = data?.choices?.[0]?.message?.content;
+    if (!text || typeof text !== 'string') {
+      throw new Error('OpenRouter response did not contain text content');
+    }
+    return text;
   }
 
   async generate(
@@ -31,28 +70,32 @@ export class AiService {
     preferredModels?: string[],
     options?: { maxRetriesPerModel?: number; retryBackoffMs?: number; failFastOnRateLimit?: boolean },
   ): Promise<string> {
-    if (!this.apiKey) {
-      throw new Error('Gemini API key is not configured');
+    if (!this.isConfigured()) {
+      throw new Error('OpenRouter API key is not configured');
     }
-    const modelOrder = preferredModels?.length ? preferredModels : this.models;
+    const requestedModels = preferredModels?.length ? preferredModels : this.defaultModels;
+    const looksLikeGeminiOnly = requestedModels.every((m) => /^gemini[-\w.]*$/i.test(m));
+    const modelOrder = looksLikeGeminiOnly ? this.defaultModels : requestedModels;
     const maxRetriesPerModel = Math.max(1, options?.maxRetriesPerModel ?? 3);
     const retryBackoffMs = Math.max(100, options?.retryBackoffMs ?? 1500);
     let lastError: Error;
     for (const modelName of modelOrder) {
       for (let attempt = 0; attempt < maxRetriesPerModel; attempt++) {
         try {
-          const model = this.genAI.getGenerativeModel({
-            model: modelName,
-            systemInstruction: systemPrompt,
-          });
-          const result = await model.generateContent(userText);
-          return result.response.text();
+          return await this.generateWithOpenRouter(systemPrompt, userText, modelName);
         } catch (error: any) {
           lastError = error;
           const message = String(error?.message || '');
-          const isRateLimit = /\b429\b|quota|rate[-\s]?limit/i.test(message);
-          console.warn(`AI call failed (model=${modelName}, attempt=${attempt + 1}): ${message}`);
+          const isRateLimit = /\b429\b|quota|rate[-\s]?limit|too many requests/i.test(message);
+          const isEndpointUnavailable = /\b404\b|no endpoints found|model.*not found/i.test(message);
+          console.warn(`AI call failed (provider=openrouter, model=${modelName}, attempt=${attempt + 1}): ${message}`);
+          if (isEndpointUnavailable) {
+            break;
+          }
           if (isRateLimit && options?.failFastOnRateLimit) {
+            break;
+          }
+          if (isRateLimit && !options?.failFastOnRateLimit) {
             break;
           }
           if (attempt < maxRetriesPerModel - 1) {
@@ -60,7 +103,7 @@ export class AiService {
           }
         }
       }
-      console.log(`Model ${modelName} exhausted retries, trying next...`);
+      console.log(`Provider openrouter: model ${modelName} exhausted retries, trying next...`);
     }
     throw lastError || new Error('All AI models failed');
   }

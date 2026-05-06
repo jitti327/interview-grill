@@ -889,6 +889,24 @@ process.stdout.write(String(solve(input)));`;
       where: { session_id: sessionId },
       orderBy: { round_order: 'asc' },
     });
+    if (aiStatus === 'none') {
+      const mode = this.evaluationMode();
+      const scoredWithAnswers = completedRounds.filter((r) => r.answer && r.score !== null);
+      if (scoredWithAnswers.length > 0) {
+        if (mode === 'db_only') {
+          aiStatus = 'db_only';
+        } else {
+          const usedFallback = scoredWithAnswers.some((r) =>
+            String(r.feedback || '').includes('[evaluation_source: database_fallback]'),
+          );
+          if (usedFallback) {
+            aiStatus = this.aiService.isConfigured() ? 'rate_limited' : 'not_configured';
+          } else {
+            aiStatus = this.aiService.isConfigured() ? 'evaluated' : 'not_configured';
+          }
+        }
+      }
+    }
 
     const effectiveUserId = userId || session.user_id;
     if (effectiveUserId && this.notifService) {
@@ -949,6 +967,9 @@ process.stdout.write(String(solve(input)));`;
       parseScore(evalData.score) ||
       Math.round((correctness * 0.4 + depth * 0.3 + clarity * 0.15 + practicality * 0.15) * 10) / 10;
     scoreVal = Math.round(scoreVal * 10) / 10;
+    if (this.isClearlyOffTopicOrGibberish(answer, round.expected_key_points || [])) {
+      scoreVal = 0;
+    }
 
     const toList = (v: unknown, fallback: string[] = []) =>
       Array.isArray(v)
@@ -981,7 +1002,7 @@ process.stdout.write(String(solve(input)));`;
       weaknesses: [...weaknesses, ...missingKeyPoints].slice(0, 10),
       follow_up_question: evalData.follow_up_question || '',
       improvement_suggestions: [...improvementSuggestions, ...next24hPlan].slice(0, 10),
-      verdict: evalData.verdict || 'needs_improvement',
+      verdict: scoreVal === 0 ? 'poor' : evalData.verdict || 'needs_improvement',
     };
 
       const updated = await this.prisma.round.update({ where: { id: round.id }, data: update });
@@ -1002,6 +1023,92 @@ process.stdout.write(String(solve(input)));`;
       .split(/\s+/)
       .map((t) => t.trim())
       .filter((t) => t.length >= 3);
+  }
+
+  private estimateGibberishSignals(answerText: string) {
+    const text = String(answerText || '').trim();
+    const lower = text.toLowerCase();
+    const alphaWords = (lower.match(/[a-z]{2,}/g) || []).map((w) => w.trim()).filter(Boolean);
+    const uniqueWords = new Set(alphaWords);
+    const commonWords = new Set([
+      'the',
+      'and',
+      'for',
+      'with',
+      'that',
+      'this',
+      'you',
+      'your',
+      'from',
+      'into',
+      'have',
+      'will',
+      'when',
+      'where',
+      'what',
+      'which',
+      'function',
+      'variable',
+      'object',
+      'array',
+      'string',
+      'class',
+      'method',
+      'scope',
+      'closure',
+      'code',
+      'data',
+      'return',
+      'value',
+      'error',
+      'logic',
+      'test',
+      'example',
+      'because',
+      'using',
+      'javascript',
+      'python',
+      'java',
+      'react',
+      'node',
+      'api',
+      'database',
+    ]);
+    const dictionaryHits = alphaWords.filter((w) => commonWords.has(w)).length;
+    const dictionaryRatio = alphaWords.length ? dictionaryHits / alphaWords.length : 0;
+    const repetitionRatio = alphaWords.length ? 1 - uniqueWords.size / alphaWords.length : 1;
+    const repeatedChars = /(.)\1{4,}/.test(lower);
+    const longJunkToken = /\b[a-z]{14,}\b/.test(lower);
+    const mostlyNonAlnum = text.length > 0 && (text.match(/[^a-z0-9\s]/gi) || []).length / text.length > 0.35;
+    const looksGibberish =
+      text.length > 25 &&
+      (repeatedChars ||
+        longJunkToken ||
+        mostlyNonAlnum ||
+        (dictionaryRatio < 0.06 && repetitionRatio > 0.55) ||
+        (alphaWords.length >= 8 && uniqueWords.size <= 3));
+    return { looksGibberish, dictionaryRatio, repetitionRatio };
+  }
+
+  private isClearlyOffTopicOrGibberish(answerText: string, expectedKeyPoints: string[] = []): boolean {
+    const normalizedAnswer = String(answerText || '').trim();
+    if (!normalizedAnswer) return true;
+    const answerLower = normalizedAnswer.toLowerCase();
+    const expected = Array.isArray(expectedKeyPoints) ? expectedKeyPoints.map((p) => String(p || '')) : [];
+    const covered = expected.filter((p) => this.keyPointLikelyCovered(answerLower, p));
+    const coverage = expected.length > 0 ? covered.length / expected.length : 0;
+    const answerTokens = new Set(this.tokenizeText(normalizedAnswer));
+    const referenceTokens = new Set(this.tokenizeText(expected.join(' ')));
+    let overlapCount = 0;
+    for (const t of answerTokens) {
+      if (referenceTokens.has(t)) overlapCount += 1;
+    }
+    const tokenOverlap = answerTokens.size > 0 ? overlapCount / answerTokens.size : 0;
+    const { looksGibberish } = this.estimateGibberishSignals(normalizedAnswer);
+    const veryLowRelevance =
+      normalizedAnswer.length >= 20 &&
+      ((expected.length > 0 && coverage < 0.15 && tokenOverlap < 0.12) || (expected.length === 0 && tokenOverlap < 0.1));
+    return looksGibberish || veryLowRelevance;
   }
 
   private keyPointLikelyCovered(answerLower: string, keyPoint: string): boolean {
@@ -1059,8 +1166,14 @@ process.stdout.write(String(solve(input)));`;
       (expected.length > 0 ? coverage * 0.5 : 0.25) + tokenOverlap * 0.35 + lengthScore * 0.15;
     if (answerText.length > 40 && answerText.length < 120) raw *= 0.85;
     let scoreVal = Math.round(Math.max(0, Math.min(10, raw * 10)) * 10) / 10;
-    if (answerText.length < 20) scoreVal = Math.min(scoreVal, 3);
-    if (answerText.length > 30 && scoreVal < 2.5) scoreVal = 2.5;
+    const { looksGibberish } = this.estimateGibberishSignals(answerText);
+    const veryLowRelevance =
+      answerText.length >= 20 &&
+      ((expected.length > 0 && coverage < 0.15 && tokenOverlap < 0.12) || (expected.length === 0 && tokenOverlap < 0.1));
+    if (answerText.length < 20) scoreVal = Math.min(scoreVal, 2);
+    if (looksGibberish || veryLowRelevance) {
+      scoreVal = 0;
+    }
     const verdict = this.verdictFromScore(scoreVal);
 
     const strengths = [
@@ -1072,11 +1185,13 @@ process.stdout.write(String(solve(input)));`;
       missing.length ? `Missing key concepts: ${missing.slice(0, 4).join('; ')}` : '',
       answerText.length < 80 ? 'Answer is too short; add deeper explanation and examples.' : '',
       tokenOverlap < 0.2 ? 'Low technical relevance; align answer with expected concepts.' : '',
+      looksGibberish ? 'Answer appears nonsensical or mostly random text.' : '',
     ].filter(Boolean);
     const suggestions = [
       missing.length ? `Include these points explicitly: ${missing.slice(0, 4).join('; ')}` : 'Add one concrete example from real-world use.',
       sampleAnswers[0] ? `Model direction: ${sampleAnswers[0]}` : 'Structure response as definition -> approach -> trade-offs -> example.',
       'Practice 3 variations of this question and compare your answers against key points.',
+      looksGibberish ? 'Avoid random text; write concise technical points tied directly to the question.' : '',
     ];
     const feedback = [
       '[evaluation_source: database_fallback]',
@@ -1145,6 +1260,7 @@ Evaluation rules:
 3) List which expected key points are missing or weak.
 4) Give one short improved answer example that demonstrates a better response.
 5) Give immediate, actionable next 24h practice plan.
+6) If the answer is nonsensical, random, or clearly off-topic, score it exactly 0 and set verdict to "poor".
 
 Return ONLY valid JSON (no markdown, no extra text) with this shape:
 {"score_overall":<number 0-10>,"dimension_scores":{"correctness":<0-10>,"depth":<0-10>,"clarity":<0-10>,"practicality":<0-10>},"feedback":"2-4 sentence evaluation","strengths":["strength1","strength2"],"weaknesses":["weakness1","weakness2"],"evidence_for_score":["quote or reference 1","quote or reference 2"],"missing_key_points":["point1","point2"],"improved_answer_example":"short better sample answer","next_24h_plan":["action1","action2"],"follow_up_question":"a grilling follow-up question","improvement_suggestions":["suggestion1","suggestion2"],"verdict":"strong|acceptable|needs_improvement|poor"}`;
